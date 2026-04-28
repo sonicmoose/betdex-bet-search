@@ -1,0 +1,42 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.2.5'
+}
+
+description = 'BetDEX stream indexer for AWS OpenSearch, Timestream, and AppSync'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+ext {
+    awsSdkVersion = '2.25.31'
+}
+
+dependencies {
+    implementation platform(org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES)
+    implementation platform("software.amazon.awssdk:bom:${awsSdkVersion}")
+
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+    implementation 'io.micrometer:micrometer-registry-cloudwatch2'
+
+    implementation 'software.amazon.awssdk:auth'
+    implementation 'software.amazon.awssdk:regions'
+    implementation 'software.amazon.awssdk:timestreamwrite'
+    implementation 'software.amazon.awssdk:apache-client'
+
+    testImplementation platform(org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES)
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+tasks.named('bootJar') {
+    archiveFileName = 'betdex-indexer.jar'
+}

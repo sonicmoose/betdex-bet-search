@@ -1,0 +1,95 @@
+name: Deploy Java Indexer
+
+on:
+  workflow_dispatch:
+    inputs:
+      stack_name:
+        description: CloudFormation/CDK stack name
+        default: BetDexIndexerStack
+        required: true
+      aws_region:
+        description: AWS region
+        default: us-east-1
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    name: Build image and deploy Fargate service
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-java-${{ inputs.stack_name }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Test Java app
+        run: ./gradlew :app:test
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: infra/package-lock.json
+
+      - name: Install infra dependencies
+        working-directory: infra
+        run: npm ci
+
+      - name: Check stack exists
+        id: stack
+        run: |
+          if aws cloudformation describe-stacks --stack-name "${{ inputs.stack_name }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Ensure base infra exists
+        if: steps.stack.outputs.exists == 'false'
+        working-directory: infra
+        run: npx cdk deploy "${{ inputs.stack_name }}" --require-approval never
+
+      - name: Read ECR repository URI
+        id: ecr
+        run: |
+          REPOSITORY_URI=$(aws cloudformation describe-stacks \
+            --stack-name "${{ inputs.stack_name }}" \
+            --query "Stacks[0].Outputs[?OutputKey=='EcrRepositoryUri'].OutputValue" \
+            --output text)
+          if [ -z "$REPOSITORY_URI" ] || [ "$REPOSITORY_URI" = "None" ]; then
+            echo "EcrRepositoryUri stack output was not found" >&2
+            exit 1
+          fi
+          echo "repository_uri=$REPOSITORY_URI" >> "$GITHUB_OUTPUT"
+          echo "image_uri=$REPOSITORY_URI:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image
+        run: |
+          docker build -t "${{ steps.ecr.outputs.image_uri }}" .
+          docker push "${{ steps.ecr.outputs.image_uri }}"
+
+      - name: Deploy Fargate service
+        working-directory: infra
+        run: npx cdk deploy "${{ inputs.stack_name }}" --require-approval never -c imageUri="${{ steps.ecr.outputs.image_uri }}"
