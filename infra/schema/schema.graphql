@@ -1,0 +1,92 @@
+schema {
+  query: Query
+  mutation: Mutation
+  subscription: Subscription
+}
+
+type Query {
+  searchMarkets(input: MarketSearchInput!): MarketSearchResult!
+  getMarket(marketId: ID!): Market
+  getMarketUpdates(marketId: ID!, from: AWSDateTime, to: AWSDateTime): [MarketUpdate!]!
+  getMarketPriceSeries(input: PriceSeriesInput!): [PricePoint!]!
+}
+
+type Mutation {
+  publishMarketUpdated(input: MarketUpdatedInput!): MarketUpdated!
+}
+
+type Subscription {
+  onMarketUpdated(marketId: ID): MarketUpdated
+    @aws_subscribe(mutations: ["publishMarketUpdated"])
+}
+
+input MarketSearchInput {
+  text: String
+  eventId: ID
+  categoryId: ID
+  subCategoryId: ID
+  status: String
+  inPlay: Boolean
+  startsAfter: AWSDateTime
+  startsBefore: AWSDateTime
+  pageSize: Int
+  nextToken: String
+}
+
+input PriceSeriesInput {
+  marketId: ID!
+  outcomeId: ID
+  side: String
+  from: AWSDateTime
+  to: AWSDateTime
+  interval: String
+}
+
+input MarketUpdatedInput {
+  marketId: ID!
+  eventId: ID
+  updateType: String
+  receivedAt: AWSDateTime!
+}
+
+type MarketSearchResult {
+  items: [MarketSearchHit!]!
+  total: Int!
+  nextToken: String
+}
+
+type MarketSearchHit {
+  id: ID!
+  source: AWSJSON!
+}
+
+type Market {
+  marketId: ID!
+  name: String
+  eventId: ID
+  status: String
+  raw: AWSJSON
+}
+
+type MarketUpdate {
+  marketId: ID!
+  messageType: String!
+  receivedAt: AWSDateTime!
+  payload: AWSJSON!
+}
+
+type PricePoint {
+  marketId: ID!
+  outcomeId: ID
+  side: String
+  price: Float
+  liquidity: Float
+  validAt: AWSDateTime
+}
+
+type MarketUpdated {
+  marketId: ID!
+  eventId: ID
+  updateType: String
+  receivedAt: AWSDateTime!
+}

@@ -1,0 +1,75 @@
+package com.betsearch.betdex.ingest;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+
+import com.betsearch.betdex.opensearch.OpenSearchWriter;
+import com.betsearch.betdex.timestream.TimestreamWriter;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.math.BigDecimal;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+
+class MarketMessageHandlerTest {
+  private final OpenSearchWriter openSearchWriter = mock(OpenSearchWriter.class);
+  private final TimestreamWriter timestreamWriter = mock(TimestreamWriter.class);
+  private final MarketMessageHandler handler = new MarketMessageHandler(
+      new ObjectMapper(),
+      openSearchWriter,
+      timestreamWriter,
+      new SimpleMeterRegistry());
+
+  @Test
+  void routesMarketUpdateToCurrentMarketIndex() {
+    handler.handle("""
+        {
+          "marketId": "m-1",
+          "eventId": "e-1",
+          "marketOutcomes": [],
+          "name": "Winner",
+          "status": "Open"
+        }
+        """);
+
+    verify(openSearchWriter).indexRaw(any(), eq("MarketUpdate"), eq("m-1"), eq("e-1"), any());
+    verify(openSearchWriter).upsertMarket(eq("m-1"), any(), any());
+  }
+
+  @Test
+  void flattensMarketPriceUpdateForOpenSearchAndTimestream() {
+    handler.handle("""
+        {
+          "updateType": "Snapshot",
+          "marketId": "m-1",
+          "eventId": "e-1",
+          "currencyId": "USDC",
+          "prices": [
+            {
+              "side": "For",
+              "outcomeId": "o-1",
+              "price": 2.14,
+              "liquidity": 123.45,
+              "change": 10.0,
+              "validAt": "2026-04-28T12:00:00Z"
+            }
+          ]
+        }
+        """);
+
+    ArgumentCaptor<PriceUpdate> priceCaptor = ArgumentCaptor.forClass(PriceUpdate.class);
+    verify(openSearchWriter).indexPrice(priceCaptor.capture());
+    PriceUpdate price = priceCaptor.getValue();
+    org.assertj.core.api.Assertions.assertThat(price.marketId()).isEqualTo("m-1");
+    org.assertj.core.api.Assertions.assertThat(price.outcomeId()).isEqualTo("o-1");
+    org.assertj.core.api.Assertions.assertThat(price.price()).isEqualByComparingTo(new BigDecimal("2.14"));
+
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<List<PriceUpdate>> listCaptor = ArgumentCaptor.forClass(List.class);
+    verify(timestreamWriter).writePrices(listCaptor.capture());
+    org.assertj.core.api.Assertions.assertThat(listCaptor.getValue()).hasSize(1);
+  }
+}
