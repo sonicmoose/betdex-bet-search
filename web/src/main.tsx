@@ -1,12 +1,12 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { Activity, BarChart3, Bell, Clock3, Database, Search, SlidersHorizontal } from 'lucide-react';
-import { getMarketUpdates, markets, searchMarkets } from './mockApi';
-import type { Market, MarketSearchInput, MarketUpdate } from './types';
+import { Search } from 'lucide-react';
+import { markets, searchMarkets } from './mockApi';
+import type { InPlayFilter, Market, MarketSearchInput, MarketSearchResult, MarketSort, MarketStatus, PricePoint } from './types';
 import './styles.css';
 
 const numberFormatter = new Intl.NumberFormat('en-US', {
-  maximumFractionDigits: 2
+  maximumFractionDigits: 0
 });
 
 const dateFormatter = new Intl.DateTimeFormat('en-US', {
@@ -17,208 +17,242 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
 });
 
 const categories = Array.from(new Map(markets.map((market) => [market.categoryId, market.categoryName])).entries());
+const subCategories = Array.from(new Map(markets.map((market) => [market.subCategoryId, market.subCategoryName])).entries())
+  .sort((left, right) => left[1].localeCompare(right[1]));
+const betdexBaseUrl = 'https://betdex.com';
+const pageSizes = [10, 20, 50];
 
 function App() {
   const [filters, setFilters] = React.useState<MarketSearchInput>({
     text: '',
-    status: 'Any',
-    inPlay: 'Any',
-    categoryId: 'Any'
+    statuses: [],
+    inPlay: [],
+    categoryIds: [],
+    subCategoryIds: [],
+    sort: 'Relevance',
+    page: 1,
+    pageSize: 10
   });
-  const [results, setResults] = React.useState<Market[]>(markets);
-  const [selectedMarketId, setSelectedMarketId] = React.useState(markets[0]?.marketId ?? '');
-  const [updates, setUpdates] = React.useState<MarketUpdate[]>([]);
+  const [searchResult, setSearchResult] = React.useState<MarketSearchResult>({
+    items: markets.slice(0, 10),
+    total: markets.length,
+    page: 1,
+    pageSize: 10
+  });
   const [loading, setLoading] = React.useState(false);
 
-  const selectedMarket = results.find((market) => market.marketId === selectedMarketId)
-    ?? markets.find((market) => market.marketId === selectedMarketId)
-    ?? results[0]
-    ?? markets[0];
+  const totalPages = Math.max(1, Math.ceil(searchResult.total / searchResult.pageSize));
+  const firstResult = searchResult.total === 0 ? 0 : (searchResult.page - 1) * searchResult.pageSize + 1;
+  const lastResult = Math.min(searchResult.total, searchResult.page * searchResult.pageSize);
 
   React.useEffect(() => {
     let active = true;
     setLoading(true);
-    searchMarkets(filters).then((items) => {
-      if (!active) {
-        return;
-      }
-      setResults(items);
-      if (items.length > 0 && !items.some((item) => item.marketId === selectedMarketId)) {
-        setSelectedMarketId(items[0].marketId);
-      }
-      setLoading(false);
-    });
-    return () => {
-      active = false;
-    };
-  }, [filters, selectedMarketId]);
-
-  React.useEffect(() => {
-    if (!selectedMarket) {
-      setUpdates([]);
-      return;
-    }
-    let active = true;
-    getMarketUpdates(selectedMarket.marketId).then((items) => {
+    searchMarkets(filters).then((result) => {
       if (active) {
-        setUpdates(items);
+        setSearchResult(result);
+        setLoading(false);
       }
     });
     return () => {
       active = false;
     };
-  }, [selectedMarket]);
+  }, [filters]);
+
+  function updateFilters(next: Partial<MarketSearchInput>) {
+    setFilters((current) => ({ ...current, ...next, page: 1 }));
+  }
+
+  function setPage(page: number) {
+    setFilters((current) => ({ ...current, page }));
+  }
 
   return (
     <main className="app-shell">
       <header className="topbar">
         <div>
-          <p className="eyebrow">BetDEX Indexer</p>
+          <p className="eyebrow">BetDEX discovery</p>
           <h1>Market Search</h1>
         </div>
-        <div className="status-strip" aria-label="Service status">
-          <span><Database size={16} /> Mock API</span>
-          <span><Bell size={16} /> Subscriptions ready</span>
+        <div className="topbar-meta">
+          <span>{loading ? 'Searching' : `${searchResult.total} markets`}</span>
+          <span>Mock data</span>
         </div>
       </header>
 
-      <section className="toolbar" aria-label="Market filters">
+      <section className="search-command" aria-label="Search and ordering">
         <label className="search-box">
-          <Search size={18} />
+          <Search size={20} />
           <input
             value={filters.text}
-            onChange={(event) => setFilters({ ...filters, text: event.target.value })}
-            placeholder="Search market, event, sport, league"
+            onChange={(event) => updateFilters({ text: event.target.value })}
+            placeholder="Search team, player, league, sport, or market"
           />
         </label>
         <Select
-          label="Status"
-          value={filters.status}
-          values={['Any', 'Open', 'Suspended', 'Settled', 'Closed']}
-          onChange={(status) => setFilters({ ...filters, status: status as MarketSearchInput['status'] })}
+          label="Order by"
+          value={filters.sort}
+          values={['Relevance', 'Start time', 'Matched', 'Liquidity']}
+          onChange={(sort) => updateFilters({ sort: sort as MarketSort })}
         />
-        <Select
-          label="In-play"
-          value={filters.inPlay}
-          values={['Any', 'Yes', 'No']}
-          onChange={(inPlay) => setFilters({ ...filters, inPlay: inPlay as MarketSearchInput['inPlay'] })}
-        />
-        <label className="select-wrap">
-          <span>Category</span>
-          <select value={filters.categoryId} onChange={(event) => setFilters({ ...filters, categoryId: event.target.value })}>
-            <option value="Any">Any</option>
-            {categories.map(([id, name]) => (
-              <option key={id} value={id}>{name}</option>
-            ))}
-          </select>
-        </label>
       </section>
 
-      <section className="workspace">
-        <aside className="results-panel" aria-label="Market results">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">Results</p>
-              <h2>{loading ? 'Searching' : `${results.length} markets`}</h2>
-            </div>
-            <SlidersHorizontal size={18} />
-          </div>
-          <div className="result-list">
-            {results.map((market) => (
-              <button
-                key={market.marketId}
-                className={`market-row ${market.marketId === selectedMarket?.marketId ? 'selected' : ''}`}
-                onClick={() => setSelectedMarketId(market.marketId)}
-              >
-                <span className="market-row-title">{market.eventName}</span>
-                <span className="market-row-subtitle">{market.name} · {market.subCategoryName}</span>
-                <span className="market-row-meta">
-                  <Status status={market.status} />
-                  {market.inPlay && <span className="live-dot">Live</span>}
-                </span>
-              </button>
-            ))}
-            {results.length === 0 && <p className="empty-state">No markets match the current filters.</p>}
-          </div>
+      <section className="search-layout">
+        <aside className="filter-panel" aria-label="Market filters">
+          <FilterGroup
+            label="Sport"
+            values={categories.map(([id, name]) => ({ value: id, label: name }))}
+            selected={filters.categoryIds}
+            onChange={(categoryIds) => updateFilters({ categoryIds })}
+          />
+          <FilterGroup
+            label="League"
+            values={subCategories.map(([id, name]) => ({ value: id, label: name }))}
+            selected={filters.subCategoryIds}
+            onChange={(subCategoryIds) => updateFilters({ subCategoryIds })}
+          />
+          <FilterGroup
+            label="Status"
+            values={['Open', 'Suspended', 'Settled', 'Closed'].map((status) => ({ value: status, label: status }))}
+            selected={filters.statuses}
+            onChange={(statuses) => updateFilters({ statuses: statuses as MarketStatus[] })}
+          />
+          <FilterGroup
+            label="In-play"
+            values={[
+              { value: 'Yes', label: 'Live' },
+              { value: 'No', label: 'Pre-match' }
+            ]}
+            selected={filters.inPlay}
+            onChange={(inPlay) => updateFilters({ inPlay: inPlay as InPlayFilter[] })}
+          />
         </aside>
 
-        {selectedMarket && (
-          <section className="detail-panel" aria-label="Selected market">
-            <div className="market-header">
-              <div>
-                <p className="eyebrow">{selectedMarket.categoryName} · {selectedMarket.subCategoryName}</p>
-                <h2>{selectedMarket.eventName}</h2>
-                <p>{selectedMarket.name}</p>
-              </div>
-              <Status status={selectedMarket.status} />
+        <section className="market-results" aria-label="Market results">
+          <div className="results-head">
+            <span>Event / Market</span>
+            <span>Matched</span>
+            <span>Prices</span>
+          </div>
+
+          <div className="market-list">
+            {searchResult.items.map((market) => (
+              <MarketRow key={market.marketId} market={market} />
+            ))}
+            {searchResult.items.length === 0 && <p className="empty-state">No markets match the current filters.</p>}
+          </div>
+
+          <div className="pagination" aria-label="Pagination">
+            <span>{firstResult}-{lastResult} of {searchResult.total}</span>
+            <div className="page-controls">
+              <button disabled={searchResult.page <= 1} onClick={() => setPage(searchResult.page - 1)}>Previous</button>
+              <span>Page {searchResult.page} of {totalPages}</span>
+              <button disabled={searchResult.page >= totalPages} onClick={() => setPage(searchResult.page + 1)}>Next</button>
             </div>
-
-            <div className="metric-grid">
-              <Metric icon={<Clock3 size={18} />} label="Starts" value={dateFormatter.format(new Date(selectedMarket.startsAt))} />
-              <Metric icon={<Activity size={18} />} label="Matched" value={`$${numberFormatter.format(selectedMarket.matched)}`} />
-              <Metric icon={<BarChart3 size={18} />} label="Liquidity" value={`$${numberFormatter.format(selectedMarket.liquidity)}`} />
-            </div>
-
-            <div className="two-column">
-              <section className="surface">
-                <div className="section-title">
-                  <h3>Prices</h3>
-                  <span>{selectedMarket.outcomes.length} outcomes</span>
-                </div>
-                <table className="price-table">
-                  <thead>
-                    <tr>
-                      <th>Outcome</th>
-                      <th>Side</th>
-                      <th>Price</th>
-                      <th>Liquidity</th>
-                      <th>Change</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedMarket.outcomes.map((price) => (
-                      <tr key={price.outcomeId}>
-                        <td>{price.outcomeName}</td>
-                        <td>{price.side}</td>
-                        <td>{price.price.toFixed(2)}</td>
-                        <td>${numberFormatter.format(price.liquidity)}</td>
-                        <td className={price.change >= 0 ? 'positive' : 'negative'}>{price.change >= 0 ? '+' : ''}{price.change.toFixed(2)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </section>
-
-              <section className="surface">
-                <div className="section-title">
-                  <h3>Update History</h3>
-                  <span>{updates.length} latest</span>
-                </div>
-                <div className="timeline">
-                  {updates.map((update) => (
-                    <article key={`${update.marketId}-${update.messageType}-${update.receivedAt}`} className="timeline-item">
-                      <span className="timeline-dot" />
-                      <div>
-                        <strong>{update.messageType}</strong>
-                        <time>{dateFormatter.format(new Date(update.receivedAt))}</time>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              </section>
-            </div>
-
-            <section className="surface raw-panel">
-              <div className="section-title">
-                <h3>Raw Source</h3>
-                <span>{selectedMarket.marketId}</span>
-              </div>
-              <pre>{JSON.stringify(selectedMarket.raw, null, 2)}</pre>
-            </section>
-          </section>
-        )}
+            <label>
+              <span>Rows</span>
+              <select
+                value={filters.pageSize}
+                onChange={(event) => updateFilters({ pageSize: Number(event.target.value) })}
+              >
+                {pageSizes.map((size) => (
+                  <option key={size} value={size}>{size}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </section>
       </section>
     </main>
+  );
+}
+
+function MarketRow({ market }: { market: Market }) {
+  return (
+    <article className="market-row">
+      <div className="market-info">
+        <div className="market-title-line">
+          <h2>{market.eventName}</h2>
+          {market.inPlay && <span className="live-pill">Live</span>}
+          <Status status={market.status} />
+        </div>
+        <p>{market.name} · {market.categoryName} · {market.subCategoryName}</p>
+        <div className="market-meta">
+          <span>{dateFormatter.format(new Date(market.startsAt))}</span>
+          <span>Liquidity ${numberFormatter.format(market.liquidity)}</span>
+        </div>
+      </div>
+
+      <div className="matched-cell">
+        <strong>${numberFormatter.format(market.matched)}</strong>
+      </div>
+
+      <div className="price-strip" aria-label={`${market.eventName} prices`}>
+        {market.outcomes.map((price) => (
+          <PriceLink key={price.outcomeId} market={market} price={price} />
+        ))}
+      </div>
+    </article>
+  );
+}
+
+function PriceLink({ market, price }: { market: Market; price: PricePoint }) {
+  const href = `${betdexBaseUrl}/markets/${encodeURIComponent(market.marketId)}?outcome=${encodeURIComponent(price.outcomeId)}`;
+
+  return (
+    <a className="price-button" href={href} target="_blank" rel="noreferrer">
+      <span>{price.outcomeName}</span>
+      <strong>{price.price.toFixed(2)}</strong>
+      <small>${numberFormatter.format(price.liquidity)}</small>
+    </a>
+  );
+}
+
+function FilterGroup({
+  label,
+  values,
+  selected,
+  onChange
+}: {
+  label: string;
+  values: Array<{ value: string; label: string }>;
+  selected: string[];
+  onChange: (selected: string[]) => void;
+}) {
+  const [expanded, setExpanded] = React.useState(false);
+  const hasOverflow = values.length > 5;
+  const visibleValues = expanded ? values : values.slice(0, 5);
+
+  function toggle(value: string) {
+    onChange(selected.includes(value)
+      ? selected.filter((item) => item !== value)
+      : [...selected, value]);
+  }
+
+  return (
+    <fieldset className="filter-group">
+      <legend>{label}</legend>
+      <div className="filter-options">
+        {visibleValues.map((item) => {
+          const checked = selected.includes(item.value);
+          return (
+            <label key={item.value} className={`check-row ${checked ? 'selected' : ''}`}>
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => toggle(item.value)}
+              />
+              <span>{item.label}</span>
+            </label>
+          );
+        })}
+      </div>
+      {hasOverflow && (
+        <button type="button" className="more-button" onClick={() => setExpanded(!expanded)}>
+          {expanded ? 'Less' : `More (${values.length - 5})`}
+        </button>
+      )}
+    </fieldset>
   );
 }
 
@@ -237,18 +271,6 @@ function Select({ label, value, values, onChange }: { label: string; value: stri
 
 function Status({ status }: { status: string }) {
   return <span className={`status status-${status.toLowerCase()}`}>{status}</span>;
-}
-
-function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  return (
-    <div className="metric">
-      {icon}
-      <div>
-        <span>{label}</span>
-        <strong>{value}</strong>
-      </div>
-    </div>
-  );
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

@@ -1,10 +1,23 @@
 export type MarketStatus = 'Open' | 'Suspended' | 'Settled' | 'Closed';
+export type InPlayFilter = 'Yes' | 'No';
+export type MarketSort = 'Relevance' | 'Start time' | 'Matched' | 'Liquidity';
 
 export interface MarketSearchInput {
   text: string;
-  status: 'Any' | MarketStatus;
-  inPlay: 'Any' | 'Yes' | 'No';
-  categoryId: string;
+  statuses: MarketStatus[];
+  inPlay: InPlayFilter[];
+  categoryIds: string[];
+  subCategoryIds: string[];
+  sort: MarketSort;
+  page: number;
+  pageSize: number;
+}
+
+export interface MarketSearchResult {
+  items: Market[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 export interface Market {
@@ -14,6 +27,7 @@ export interface Market {
   eventName: string;
   categoryId: string;
   categoryName: string;
+  subCategoryId: string;
   subCategoryName: string;
   status: MarketStatus;
   inPlay: boolean;
@@ -32,11 +46,4 @@ export interface PricePoint {
   liquidity: number;
   change: number;
   validAt: string;
-}
-
-export interface MarketUpdate {
-  marketId: string;
-  messageType: string;
-  receivedAt: string;
-  payload: Record<string, unknown>;
 }

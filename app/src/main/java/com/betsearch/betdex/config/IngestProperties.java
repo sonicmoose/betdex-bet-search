@@ -7,8 +7,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record IngestProperties(
     int queueCapacity,
     int workerCount,
-    Reconnect reconnect
+    Reconnect reconnect,
+    Stream stream
 ) {
   public record Reconnect(Duration initialDelay, Duration maxDelay) {
+  }
+
+  public record Stream(Duration rotationInterval, Duration dedupeTtl) {
   }
 }

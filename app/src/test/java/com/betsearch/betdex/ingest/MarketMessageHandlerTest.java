@@ -41,12 +41,15 @@ class MarketMessageHandlerTest {
 
   @Test
   void flattensMarketPriceUpdateForOpenSearchAndTimestream() {
-    handler.handle("""
-        {
-          "updateType": "Snapshot",
-          "marketId": "m-1",
-          "eventId": "e-1",
-          "currencyId": "USDC",
+	    handler.handle("""
+	        {
+	          "updateType": "Snapshot",
+	          "marketId": "m-1",
+	          "eventId": "e-1",
+	          "eventGroupId": "eg-1",
+	          "categoryId": "cat-1",
+	          "subCategoryId": "sub-1",
+	          "currencyId": "USDC",
           "prices": [
             {
               "side": "For",
@@ -60,12 +63,20 @@ class MarketMessageHandlerTest {
         }
         """);
 
-    ArgumentCaptor<PriceUpdate> priceCaptor = ArgumentCaptor.forClass(PriceUpdate.class);
-    verify(openSearchWriter).indexPrice(priceCaptor.capture());
-    PriceUpdate price = priceCaptor.getValue();
-    org.assertj.core.api.Assertions.assertThat(price.marketId()).isEqualTo("m-1");
-    org.assertj.core.api.Assertions.assertThat(price.outcomeId()).isEqualTo("o-1");
-    org.assertj.core.api.Assertions.assertThat(price.price()).isEqualByComparingTo(new BigDecimal("2.14"));
+	    ArgumentCaptor<PriceUpdate> priceCaptor = ArgumentCaptor.forClass(PriceUpdate.class);
+	    verify(openSearchWriter).indexPrice(priceCaptor.capture());
+	    PriceUpdate price = priceCaptor.getValue();
+	    org.assertj.core.api.Assertions.assertThat(price.marketId()).isEqualTo("m-1");
+	    org.assertj.core.api.Assertions.assertThat(price.eventId()).isEqualTo("e-1");
+	    org.assertj.core.api.Assertions.assertThat(price.eventGroupId()).isEqualTo("eg-1");
+	    org.assertj.core.api.Assertions.assertThat(price.categoryId()).isEqualTo("cat-1");
+	    org.assertj.core.api.Assertions.assertThat(price.subCategoryId()).isEqualTo("sub-1");
+	    org.assertj.core.api.Assertions.assertThat(price.outcomeId()).isEqualTo("o-1");
+	    org.assertj.core.api.Assertions.assertThat(price.price()).isEqualByComparingTo(new BigDecimal("2.14"));
+	    org.assertj.core.api.Assertions.assertThat(price.source())
+	        .containsEntry("eventGroupId", "eg-1")
+	        .containsEntry("categoryId", "cat-1")
+	        .containsEntry("subCategoryId", "sub-1");
 
     @SuppressWarnings("unchecked")
     ArgumentCaptor<List<PriceUpdate>> listCaptor = ArgumentCaptor.forClass(List.class);

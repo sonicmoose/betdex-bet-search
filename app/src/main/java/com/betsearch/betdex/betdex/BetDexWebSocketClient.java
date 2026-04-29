@@ -4,22 +4,29 @@ import com.betsearch.betdex.config.BetDexProperties;
 import com.betsearch.betdex.config.IngestProperties;
 import com.betsearch.betdex.ingest.InboundMessageQueue;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PreDestroy;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.time.Duration;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
@@ -41,9 +48,14 @@ public class BetDexWebSocketClient implements ApplicationRunner {
   private final InboundMessageQueue queue;
   private final ObjectMapper objectMapper;
   private final Counter reconnectCounter;
+  private final Counter rotationCounter;
+  private final Counter duplicateCounter;
+  private final RecentMessageDeduper deduper;
   private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-  private final AtomicReference<WebSocket> webSocket = new AtomicReference<>();
+  private final AtomicReference<Connection> activeConnection = new AtomicReference<>();
+  private final AtomicReference<Connection> pendingReplacement = new AtomicReference<>();
   private final AtomicBoolean stopped = new AtomicBoolean(false);
+  private final AtomicLong connectionIds = new AtomicLong();
   private volatile Duration reconnectDelay;
 
   public BetDexWebSocketClient(
@@ -59,28 +71,36 @@ public class BetDexWebSocketClient implements ApplicationRunner {
     this.queue = queue;
     this.objectMapper = objectMapper;
     this.reconnectCounter = meterRegistry.counter("betdex.websocket.reconnects");
+    this.rotationCounter = meterRegistry.counter("betdex.websocket.rotations");
+    this.duplicateCounter = meterRegistry.counter("betdex.websocket.duplicates");
+    this.deduper = new RecentMessageDeduper(ingestProperties.stream().dedupeTtl());
     this.reconnectDelay = ingestProperties.reconnect().initialDelay();
   }
 
   @Override
   public void run(ApplicationArguments args) {
-    connect();
+    connect(false);
   }
 
-  private void connect() {
+  private void connect(boolean replacement) {
     if (stopped.get()) {
       return;
     }
-    log.info("Connecting to BetDEX stream {}", properties.streamUrl());
+    long connectionId = connectionIds.incrementAndGet();
+    Connection connection = new Connection(connectionId, replacement);
+    if (replacement && !pendingReplacement.compareAndSet(null, connection)) {
+      log.info("BetDEX WebSocket replacement is already pending; skipping new rotation connection={}", connectionId);
+      return;
+    }
+    log.info("Connecting to BetDEX stream {} connection={} replacement={}", properties.streamUrl(), connectionId, replacement);
     HttpClient.newHttpClient()
         .newWebSocketBuilder()
-        .buildAsync(URI.create(properties.streamUrl()), new Listener())
+        .buildAsync(URI.create(properties.streamUrl()), connection)
         .whenComplete((socket, error) -> {
           if (error != null) {
-            log.warn("BetDEX WebSocket connect failed", error);
-            scheduleReconnect();
-          } else {
-            webSocket.set(socket);
+            log.warn("BetDEX WebSocket connect failed connection={}", connectionId, error);
+            pendingReplacement.compareAndSet(connection, null);
+            scheduleReconnect(replacement && activeConnection.get() != null);
           }
         });
   }
@@ -102,6 +122,10 @@ public class BetDexWebSocketClient implements ApplicationRunner {
   }
 
   private void scheduleReconnect() {
+    scheduleReconnect(false);
+  }
+
+  private void scheduleReconnect(boolean replacement) {
     if (stopped.get()) {
       return;
     }
@@ -110,28 +134,128 @@ public class BetDexWebSocketClient implements ApplicationRunner {
     reconnectDelay = delay.multipliedBy(2).compareTo(ingestProperties.reconnect().maxDelay()) > 0
         ? ingestProperties.reconnect().maxDelay()
         : delay.multipliedBy(2);
-    scheduler.schedule(this::connect, delay.toMillis(), TimeUnit.MILLISECONDS);
+    scheduler.schedule(() -> connect(replacement), delay.toMillis(), TimeUnit.MILLISECONDS);
+  }
+
+  private void scheduleRotation(Connection connection) {
+    Duration interval = ingestProperties.stream().rotationInterval();
+    if (interval.isZero() || interval.isNegative()) {
+      return;
+    }
+
+    ScheduledFuture<?> task = scheduler.schedule(() -> {
+      if (!stopped.get() && activeConnection.get() == connection) {
+        rotationCounter.increment();
+        log.info("Rotating BetDEX WebSocket before connection age limit connection={}", connection.id);
+        connect(true);
+      }
+    }, interval.toMillis(), TimeUnit.MILLISECONDS);
+    connection.rotationTask.set(task);
+  }
+
+  private void promote(Connection connection, WebSocket socket) {
+    connection.socket.set(socket);
+    connection.promoted.set(true);
+    pendingReplacement.compareAndSet(connection, null);
+    reconnectDelay = ingestProperties.reconnect().initialDelay();
+    Connection previous = activeConnection.getAndSet(connection);
+    scheduleRotation(connection);
+    if (previous != null && previous != connection) {
+      previous.close("rotated");
+    }
+  }
+
+  private void handleConnectionEnded(Connection connection, String source) {
+    ScheduledFuture<?> task = connection.rotationTask.getAndSet(null);
+    if (task != null) {
+      task.cancel(false);
+    }
+    pendingReplacement.compareAndSet(connection, null);
+
+    if (stopped.get() || connection.closedByClient.get()) {
+      return;
+    }
+
+    if (activeConnection.compareAndSet(connection, null)) {
+      log.warn("Active BetDEX WebSocket ended from {}; reconnecting connection={}", source, connection.id);
+      scheduleReconnect(false);
+    } else if (connection.replacement && activeConnection.get() != null) {
+      log.warn("Replacement BetDEX WebSocket ended from {}; retrying rotation connection={}", source, connection.id);
+      scheduleReconnect(true);
+    } else {
+      log.warn("Non-active BetDEX WebSocket ended from {} connection={}", source, connection.id);
+    }
+  }
+
+  private void offerDeduped(String message) {
+    if (!deduper.accept(fingerprint(message))) {
+      duplicateCounter.increment();
+      return;
+    }
+
+    if (!queue.offer(message)) {
+      log.warn("Dropped BetDEX stream message because inbound queue is full");
+    }
+  }
+
+  private String fingerprint(String message) {
+    try {
+      JsonNode node = objectMapper.readTree(message);
+      return sha256(objectMapper.writeValueAsString(node));
+    } catch (JsonProcessingException e) {
+      return sha256(message);
+    }
+  }
+
+  private String sha256(String value) {
+    try {
+      MessageDigest digest = MessageDigest.getInstance("SHA-256");
+      return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
+    } catch (NoSuchAlgorithmException e) {
+      throw new IllegalStateException("SHA-256 digest is not available", e);
+    }
   }
 
   @PreDestroy
   void stop() {
     stopped.set(true);
-    WebSocket socket = webSocket.get();
-    if (socket != null) {
-      socket.sendClose(WebSocket.NORMAL_CLOSURE, "shutdown");
+    Connection connection = activeConnection.getAndSet(null);
+    if (connection != null) {
+      connection.close("shutdown");
+    }
+    Connection replacement = pendingReplacement.getAndSet(null);
+    if (replacement != null) {
+      replacement.close("shutdown");
     }
     scheduler.shutdownNow();
   }
 
-  private final class Listener implements WebSocket.Listener {
+  private final class Connection implements WebSocket.Listener {
+    private final long id;
+    private final boolean replacement;
     private final StringBuilder text = new StringBuilder();
+    private final AtomicReference<WebSocket> socket = new AtomicReference<>();
+    private final AtomicReference<ScheduledFuture<?>> rotationTask = new AtomicReference<>();
+    private final AtomicBoolean closedByClient = new AtomicBoolean(false);
+    private final AtomicBoolean ended = new AtomicBoolean(false);
+    private final AtomicBoolean promoted = new AtomicBoolean(false);
+
+    private Connection(long id, boolean replacement) {
+      this.id = id;
+      this.replacement = replacement;
+    }
 
     @Override
     public void onOpen(WebSocket webSocket) {
-      reconnectDelay = ingestProperties.reconnect().initialDelay();
+      socket.set(webSocket);
       WebSocket.Listener.super.onOpen(webSocket);
       sendStartupFrames(webSocket);
-      log.info("BetDEX WebSocket connected and subscriptions sent");
+      if (replacement) {
+        log.info("BetDEX replacement WebSocket connected and subscriptions sent; waiting for first message connection={}", id);
+      } else {
+        promote(this, webSocket);
+        log.info("BetDEX WebSocket connected and subscriptions sent connection={}", id);
+      }
     }
 
     @Override
@@ -140,9 +264,11 @@ public class BetDexWebSocketClient implements ApplicationRunner {
       if (last) {
         String message = text.toString();
         text.setLength(0);
-        if (!queue.offer(message)) {
-          log.warn("Dropped BetDEX stream message because inbound queue is full");
+        if (replacement && promoted.compareAndSet(false, true)) {
+          promote(this, webSocket);
+          log.info("BetDEX replacement WebSocket received first message and is now active connection={}", id);
         }
+        offerDeduped(message);
       }
       webSocket.request(1);
       return null;
@@ -150,15 +276,32 @@ public class BetDexWebSocketClient implements ApplicationRunner {
 
     @Override
     public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
-      log.warn("BetDEX WebSocket closed status={} reason={}", statusCode, reason);
-      scheduleReconnect();
+      log.warn("BetDEX WebSocket closed connection={} status={} reason={}", id, statusCode, reason);
+      if (ended.compareAndSet(false, true)) {
+        handleConnectionEnded(this, "close");
+      }
       return WebSocket.Listener.super.onClose(webSocket, statusCode, reason);
     }
 
     @Override
     public void onError(WebSocket webSocket, Throwable error) {
-      log.warn("BetDEX WebSocket error", error);
-      scheduleReconnect();
+      log.warn("BetDEX WebSocket error connection={}", id, error);
+      if (ended.compareAndSet(false, true)) {
+        handleConnectionEnded(this, "error");
+      }
+    }
+
+    private void close(String reason) {
+      closedByClient.set(true);
+      ScheduledFuture<?> task = rotationTask.getAndSet(null);
+      if (task != null) {
+        task.cancel(false);
+      }
+
+      WebSocket current = socket.get();
+      if (current != null) {
+        current.sendClose(WebSocket.NORMAL_CLOSURE, reason);
+      }
     }
   }
 }

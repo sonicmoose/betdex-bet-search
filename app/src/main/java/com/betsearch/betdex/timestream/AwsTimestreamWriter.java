@@ -60,6 +60,9 @@ public class AwsTimestreamWriter implements TimestreamWriter {
     return List.of(
         dimension("marketId", price.marketId()),
         dimension("eventId", price.eventId()),
+        dimension("eventGroupId", price.eventGroupId()),
+        dimension("categoryId", price.categoryId()),
+        dimension("subCategoryId", price.subCategoryId()),
         dimension("outcomeId", price.outcomeId()),
         dimension("side", price.side()),
         dimension("currencyId", price.currencyId()));
