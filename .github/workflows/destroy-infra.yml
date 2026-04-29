@@ -1,4 +1,4 @@
-name: Deploy Infra
+name: Destroy Infra
 
 on:
   workflow_dispatch:
@@ -11,19 +11,29 @@ on:
         description: AWS region
         default: eu-west-2
         required: true
+      confirm_destroy:
+        description: Type DESTROY to confirm stack deletion
+        required: true
 
 permissions:
   contents: read
   id-token: write
 
 jobs:
-  deploy:
-    name: Deploy CDK stack
+  destroy:
+    name: Destroy CDK stack
     runs-on: ubuntu-latest
     concurrency:
-      group: deploy-infra-${{ inputs.stack_name }}
+      group: destroy-infra-${{ inputs.stack_name }}
       cancel-in-progress: false
     steps:
+      - name: Check confirmation
+        run: |
+          if [ "${{ inputs.confirm_destroy }}" != "DESTROY" ]; then
+            echo "confirm_destroy must be exactly DESTROY" >&2
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -48,22 +58,6 @@ jobs:
         working-directory: infra
         run: npm run build
 
-      - name: Read current image URI
-        id: current_image
-        run: |
-          IMAGE_URI=$(aws cloudformation describe-stacks \
-            --stack-name "${{ inputs.stack_name }}" \
-            --query "Stacks[0].Outputs[?OutputKey=='ContainerImage'].OutputValue" \
-            --output text 2>/dev/null || true)
-          if [ -n "$IMAGE_URI" ] && [ "$IMAGE_URI" != "None" ]; then
-            echo "image_uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Deploy infra
+      - name: Destroy stack
         working-directory: infra
-        run: |
-          if [ -n "${{ steps.current_image.outputs.image_uri }}" ]; then
-            npx cdk deploy "${{ inputs.stack_name }}" --require-approval never -c imageUri="${{ steps.current_image.outputs.image_uri }}"
-          else
-            npx cdk deploy "${{ inputs.stack_name }}" --require-approval never
-          fi
+        run: npx cdk destroy "${{ inputs.stack_name }}" --force
