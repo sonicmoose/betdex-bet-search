@@ -24,6 +24,8 @@ web/dist/
 .springBeans
 .sts4-cache
 bin/
+!infra/bin/
+!infra/bin/app.ts
 !**/src/main/**/bin/
 !**/src/test/**/bin/
 
