@@ -133,8 +133,9 @@ export class BetDexIndexerStack extends Stack {
         resources: ['*']
       }));
 
+      const containerImage = ecs.ContainerImage.fromEcrRepository(imageRepository, imageTagFromUri(imageUri));
       const container = taskDefinition.addContainer('Indexer', {
-        image: ecs.ContainerImage.fromRegistry(imageUri),
+        image: containerImage,
         logging: ecs.LogDrivers.awsLogs({
           streamPrefix: 'betdex-indexer',
           logGroup
@@ -264,11 +265,31 @@ export class BetDexIndexerStack extends Stack {
   }
 }
 
+function imageTagFromUri(imageUri: string): string {
+  const separator = imageUri.lastIndexOf(':');
+  if (separator <= imageUri.lastIndexOf('/')) {
+    throw new Error(`imageUri must include a tag, for example ${imageUri}:latest`);
+  }
+  return imageUri.slice(separator + 1);
+}
+
 function searchMarketsRequestTemplate(): string {
   return `
 #set($input = $ctx.args.input)
 #set($must = [])
 #set($filter = [])
+#set($sort = [])
+#set($pageSize = $util.defaultIfNull($input.pageSize, 25))
+#if($pageSize < 1)
+  #set($pageSize = 25)
+#elseif($pageSize > 100)
+  #set($pageSize = 100)
+#end
+#set($page = $util.defaultIfNull($input.page, 1))
+#if($page < 1)
+  #set($page = 1)
+#end
+#set($from = ($page - 1) * $pageSize)
 #if($input.text)
   $util.qr($must.add({"multi_match":{"query":$input.text,"fields":["raw.name^3","raw.eventName","raw.categoryName","raw.*"]}}))
 #else
@@ -279,10 +300,28 @@ function searchMarketsRequestTemplate(): string {
     $util.qr($filter.add({"term":{"raw.$field":$input[$field]}}))
   #end
 #end
-#if(!$util.isNull($input.inPlay))
-  #if($input.inPlay)
+#if(!$util.isNull($input.categoryIds) && $input.categoryIds.size() > 0)
+  $util.qr($filter.add({"terms":{"raw.categoryId":$input.categoryIds}}))
+#end
+#if(!$util.isNull($input.subCategoryIds) && $input.subCategoryIds.size() > 0)
+  $util.qr($filter.add({"terms":{"raw.subCategoryId":$input.subCategoryIds}}))
+#end
+#if(!$util.isNull($input.statuses) && $input.statuses.size() > 0)
+  $util.qr($filter.add({"terms":{"raw.status":$input.statuses}}))
+#end
+#if(!$util.isNull($input.inPlay) && $input.inPlay.size() > 0)
+  #set($wantsLive = false)
+  #set($wantsPre = false)
+  #foreach($flag in $input.inPlay)
+    #if($flag)
+      #set($wantsLive = true)
+    #else
+      #set($wantsPre = true)
+    #end
+  #end
+  #if($wantsLive && !$wantsPre)
     $util.qr($filter.add({"term":{"raw.inPlayStatus":"InPlay"}}))
-  #else
+  #elseif($wantsPre && !$wantsLive)
     $util.qr($filter.add({"terms":{"raw.inPlayStatus":["NotApplicable","PrePlay"]}}))
   #end
 #end
@@ -292,6 +331,13 @@ function searchMarketsRequestTemplate(): string {
   #if($input.startsBefore) $util.qr($range.put("lte", $input.startsBefore)) #end
   $util.qr($filter.add({"range":{"raw.lockAt":$range}}))
 #end
+#if($input.sort == "START_TIME")
+  $util.qr($sort.add({"raw.lockAt":"asc"}))
+#elseif($input.sort == "MATCHED")
+  $util.qr($sort.add({"raw.matched":"desc"}))
+#elseif($input.sort == "LIQUIDITY")
+  $util.qr($sort.add({"raw.liquidity":"desc"}))
+#end
 {
   "version": "2018-05-29",
   "method": "POST",
@@ -299,7 +345,9 @@ function searchMarketsRequestTemplate(): string {
   "params": {
     "headers": { "Content-Type": "application/json" },
     "body": {
-      "size": $util.defaultIfNull($input.pageSize, 25),
+      "from": $from,
+      "size": $pageSize,
+      "sort": $util.toJson($sort),
       "query": { "bool": { "must": $util.toJson($must), "filter": $util.toJson($filter) } }
     }
   }

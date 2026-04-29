@@ -105,6 +105,9 @@ public class MarketMessageHandler {
       Map<String, Object> source = new LinkedHashMap<>();
       source.put("marketId", text(root, "marketId"));
       source.put("eventId", text(root, "eventId"));
+      source.put("eventGroupId", text(root, "eventGroupId"));
+      source.put("categoryId", text(root, "categoryId"));
+      source.put("subCategoryId", text(root, "subCategoryId"));
       source.put("outcomeId", text(priceNode, "outcomeId"));
       source.put("side", text(priceNode, "side"));
       source.put("currencyId", text(root, "currencyId"));
@@ -117,6 +120,9 @@ public class MarketMessageHandler {
       result.add(new PriceUpdate(
           text(root, "marketId"),
           text(root, "eventId"),
+          text(root, "eventGroupId"),
+          text(root, "categoryId"),
+          text(root, "subCategoryId"),
           text(priceNode, "outcomeId"),
           text(priceNode, "side"),
           text(root, "currencyId"),

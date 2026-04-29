@@ -7,6 +7,9 @@ import java.util.Map;
 public record PriceUpdate(
     String marketId,
     String eventId,
+    String eventGroupId,
+    String categoryId,
+    String subCategoryId,
     String outcomeId,
     String side,
     String currencyId,

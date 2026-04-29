@@ -26,6 +26,9 @@ ingest:
   reconnect:
     initial-delay: ${INGEST_RECONNECT_INITIAL_DELAY:1s}
     max-delay: ${INGEST_RECONNECT_MAX_DELAY:1m}
+  stream:
+    rotation-interval: ${INGEST_STREAM_ROTATION_INTERVAL:115m}
+    dedupe-ttl: ${INGEST_STREAM_DEDUPE_TTL:10m}
 
 management:
   endpoints:

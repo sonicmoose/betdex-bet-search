@@ -24,13 +24,25 @@ input MarketSearchInput {
   text: String
   eventId: ID
   categoryId: ID
+  categoryIds: [ID!]
   subCategoryId: ID
+  subCategoryIds: [ID!]
   status: String
-  inPlay: Boolean
+  statuses: [String!]
+  inPlay: [Boolean!]
   startsAfter: AWSDateTime
   startsBefore: AWSDateTime
+  sort: MarketSearchSort
+  page: Int
   pageSize: Int
   nextToken: String
+}
+
+enum MarketSearchSort {
+  RELEVANCE
+  START_TIME
+  MATCHED
+  LIQUIDITY
 }
 
 input PriceSeriesInput {
