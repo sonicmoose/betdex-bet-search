@@ -17,13 +17,13 @@ Required environment:
 - `BETDEX_APP_KEY` - Monaco/BetDEX app id
 - `BETDEX_API_KEY`
 - `OPENSEARCH_ENDPOINT`
-- `TIMESTREAM_DATABASE`
-- `TIMESTREAM_TABLE`
 - `AWS_REGION`
 
 Optional:
 
 - `TIMESTREAM_ENABLED=false`
+- `TIMESTREAM_DATABASE`
+- `TIMESTREAM_TABLE`
 - `INGEST_QUEUE_CAPACITY=10000`
 - `INGEST_WORKER_COUNT=2`
 
@@ -58,6 +58,12 @@ npx cdk deploy -c imageUri=123456789012.dkr.ecr.eu-west-1.amazonaws.com/betdex-i
 ```
 
 The stack creates an ECR repository and static web hosting bucket/distribution. ECS/Fargate is only created when `imageUri` is passed, which keeps the first infra deploy lighter for personal-account testing.
+
+Timestream is disabled by default because new AWS accounts may not have access to Timestream for LiveAnalytics. When disabled, the indexer still writes markets and prices to OpenSearch, but historical price metrics are skipped by the Timestream writer. If the account has Timestream access, enable it explicitly:
+
+```bash
+npx cdk deploy -c enableTimestream=true -c imageUri=123456789012.dkr.ecr.eu-west-1.amazonaws.com/betdex-indexer:latest
+```
 
 ## Web UI
 

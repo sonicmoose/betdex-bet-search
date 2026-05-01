@@ -11,6 +11,14 @@ on:
         description: AWS region
         default: eu-west-1
         required: true
+      enable_timestream:
+        description: Enable Timestream resources. Only use if the AWS account has Timestream for LiveAnalytics access.
+        default: 'false'
+        required: true
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 permissions:
   contents: read
@@ -62,8 +70,12 @@ jobs:
       - name: Deploy infra
         working-directory: infra
         run: |
+          CONTEXT_ARGS=()
+          if [ "${{ inputs.enable_timestream }}" = "true" ]; then
+            CONTEXT_ARGS+=("-c" "enableTimestream=true")
+          fi
           if [ -n "${{ steps.current_image.outputs.image_uri }}" ]; then
-            npx cdk deploy "${{ inputs.stack_name }}" --require-approval never -c imageUri="${{ steps.current_image.outputs.image_uri }}"
+            npx cdk deploy "${{ inputs.stack_name }}" --require-approval never "${CONTEXT_ARGS[@]}" -c imageUri="${{ steps.current_image.outputs.image_uri }}"
           else
-            npx cdk deploy "${{ inputs.stack_name }}" --require-approval never
+            npx cdk deploy "${{ inputs.stack_name }}" --require-approval never "${CONTEXT_ARGS[@]}"
           fi

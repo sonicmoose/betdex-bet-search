@@ -21,6 +21,7 @@ export class BetDexIndexerStack extends Stack {
     super(scope, id, props);
 
     const imageUri = this.node.tryGetContext('imageUri') as string | undefined;
+    const enableTimestream = this.node.tryGetContext('enableTimestream') === 'true';
 
     const imageRepository = new ecr.Repository(this, 'IndexerImageRepository', {
       repositoryName: 'betdex-indexer',
@@ -94,19 +95,23 @@ export class BetDexIndexerStack extends Stack {
       removalPolicy: RemovalPolicy.RETAIN
     });
 
-    const timestreamDatabase = new timestream.CfnDatabase(this, 'TimestreamDatabase', {
-      databaseName: 'betdex'
-    });
+    let timestreamDatabase: timestream.CfnDatabase | undefined;
+    let timestreamTable: timestream.CfnTable | undefined;
+    if (enableTimestream) {
+      timestreamDatabase = new timestream.CfnDatabase(this, 'TimestreamDatabase', {
+        databaseName: 'betdex'
+      });
 
-    const timestreamTable = new timestream.CfnTable(this, 'TimestreamTable', {
-      databaseName: timestreamDatabase.databaseName!,
-      tableName: 'market_price_metrics',
-      retentionProperties: {
-        memoryStoreRetentionPeriodInHours: '24',
-        magneticStoreRetentionPeriodInDays: '365'
-      }
-    });
-    timestreamTable.addDependency(timestreamDatabase);
+      timestreamTable = new timestream.CfnTable(this, 'TimestreamTable', {
+        databaseName: timestreamDatabase.databaseName!,
+        tableName: 'market_price_metrics',
+        retentionProperties: {
+          memoryStoreRetentionPeriodInHours: '24',
+          magneticStoreRetentionPeriodInDays: '365'
+        }
+      });
+      timestreamTable.addDependency(timestreamDatabase);
+    }
 
     if (imageUri) {
       const vpc = new ec2.Vpc(this, 'Vpc', {
@@ -128,10 +133,12 @@ export class BetDexIndexerStack extends Stack {
 
       betdexSecret.grantRead(taskDefinition.taskRole);
       domain.grantReadWrite(taskDefinition.taskRole);
-      taskDefinition.taskRole.addToPrincipalPolicy(new iam.PolicyStatement({
-        actions: ['timestream:WriteRecords', 'timestream:DescribeEndpoints'],
-        resources: ['*']
-      }));
+      if (enableTimestream) {
+        taskDefinition.taskRole.addToPrincipalPolicy(new iam.PolicyStatement({
+          actions: ['timestream:WriteRecords', 'timestream:DescribeEndpoints'],
+          resources: ['*']
+        }));
+      }
 
       const containerImage = ecs.ContainerImage.fromEcrRepository(imageRepository, imageTagFromUri(imageUri));
       const container = taskDefinition.addContainer('Indexer', {
@@ -144,9 +151,9 @@ export class BetDexIndexerStack extends Stack {
           BETDEX_REST_BASE_URL: this.node.tryGetContext('betdexRestBaseUrl') ?? 'https://api.betdex.com',
           BETDEX_STREAM_URL: this.node.tryGetContext('betdexStreamUrl') ?? 'wss://production.stream.api.monacoprotocol.xyz',
           OPENSEARCH_ENDPOINT: `https://${domain.domainEndpoint}`,
-          TIMESTREAM_ENABLED: 'true',
-          TIMESTREAM_DATABASE: timestreamDatabase.databaseName!,
-          TIMESTREAM_TABLE: timestreamTable.tableName!,
+          TIMESTREAM_ENABLED: enableTimestream ? 'true' : 'false',
+          TIMESTREAM_DATABASE: enableTimestream ? timestreamDatabase!.databaseName! : '',
+          TIMESTREAM_TABLE: enableTimestream ? timestreamTable!.tableName! : '',
           AWS_REGION: Stack.of(this).region
         },
         secrets: {

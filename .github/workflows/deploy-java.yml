@@ -11,6 +11,14 @@ on:
         description: AWS region
         default: eu-west-1
         required: true
+      enable_timestream:
+        description: Enable Timestream resources. Only use if the AWS account has Timestream for LiveAnalytics access.
+        default: 'false'
+        required: true
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 permissions:
   contents: read
@@ -66,7 +74,12 @@ jobs:
       - name: Ensure base infra exists
         if: steps.stack.outputs.exists == 'false'
         working-directory: infra
-        run: npx cdk deploy "${{ inputs.stack_name }}" --require-approval never
+        run: |
+          CONTEXT_ARGS=()
+          if [ "${{ inputs.enable_timestream }}" = "true" ]; then
+            CONTEXT_ARGS+=("-c" "enableTimestream=true")
+          fi
+          npx cdk deploy "${{ inputs.stack_name }}" --require-approval never "${CONTEXT_ARGS[@]}"
 
       - name: Read ECR repository URI
         id: ecr
@@ -92,4 +105,9 @@ jobs:
 
       - name: Deploy Fargate service
         working-directory: infra
-        run: npx cdk deploy "${{ inputs.stack_name }}" --require-approval never -c imageUri="${{ steps.ecr.outputs.image_uri }}"
+        run: |
+          CONTEXT_ARGS=()
+          if [ "${{ inputs.enable_timestream }}" = "true" ]; then
+            CONTEXT_ARGS+=("-c" "enableTimestream=true")
+          fi
+          npx cdk deploy "${{ inputs.stack_name }}" --require-approval never "${CONTEXT_ARGS[@]}" -c imageUri="${{ steps.ecr.outputs.image_uri }}"
