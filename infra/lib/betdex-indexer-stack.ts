@@ -286,6 +286,7 @@ function searchMarketsRequestTemplate(): string {
 #set($must = [])
 #set($filter = [])
 #set($sort = [])
+#set($hasQuery = false)
 #set($pageSize = $util.defaultIfNull($input.pageSize, 25))
 #if($pageSize < 1)
   #set($pageSize = 25)
@@ -298,32 +299,39 @@ function searchMarketsRequestTemplate(): string {
 #end
 #set($from = ($page - 1) * $pageSize)
 #if($input.text)
+  #set($hasQuery = true)
   $util.qr($must.add({"multi_match":{"query":$input.text,"fields":["raw.name^3","raw.eventName","raw.categoryName","raw.*"]}}))
-#else
-  $util.qr($must.add({"match_all":{}}))
 #end
 #if(!$util.isNull($input.eventId))
+  #set($hasQuery = true)
   $util.qr($filter.add({"term":{"raw.eventId.keyword":$input.eventId}}))
 #end
 #if(!$util.isNull($input.categoryId))
+  #set($hasQuery = true)
   $util.qr($filter.add({"term":{"raw.categoryId.keyword":$input.categoryId}}))
 #end
 #if(!$util.isNull($input.subCategoryId))
+  #set($hasQuery = true)
   $util.qr($filter.add({"term":{"raw.subCategoryId.keyword":$input.subCategoryId}}))
 #end
 #if(!$util.isNull($input.status))
+  #set($hasQuery = true)
   $util.qr($filter.add({"term":{"raw.status.keyword":$input.status}}))
 #end
 #if(!$util.isNull($input.categoryIds) && $input.categoryIds.size() > 0)
+  #set($hasQuery = true)
   $util.qr($filter.add({"terms":{"raw.categoryId.keyword":$input.categoryIds}}))
 #end
 #if(!$util.isNull($input.subCategoryIds) && $input.subCategoryIds.size() > 0)
+  #set($hasQuery = true)
   $util.qr($filter.add({"terms":{"raw.subCategoryId.keyword":$input.subCategoryIds}}))
 #end
 #if(!$util.isNull($input.statuses) && $input.statuses.size() > 0)
+  #set($hasQuery = true)
   $util.qr($filter.add({"terms":{"raw.status.keyword":$input.statuses}}))
 #end
 #if(!$util.isNull($input.inPlay) && $input.inPlay.size() > 0)
+  #set($hasQuery = true)
   #set($wantsLive = false)
   #set($wantsPre = false)
   #foreach($flag in $input.inPlay)
@@ -340,6 +348,7 @@ function searchMarketsRequestTemplate(): string {
   #end
 #end
 #if($input.startsAfter || $input.startsBefore)
+  #set($hasQuery = true)
   #set($range = {})
   #if($input.startsAfter) $util.qr($range.put("gte", $input.startsAfter)) #end
   #if($input.startsBefore) $util.qr($range.put("lte", $input.startsBefore)) #end
@@ -352,6 +361,11 @@ function searchMarketsRequestTemplate(): string {
 #elseif($input.sort == "LIQUIDITY")
   $util.qr($sort.add({"raw.liquidity":"desc"}))
 #end
+#if($hasQuery)
+  #set($query = {"bool": { "must": $must, "filter": $filter }})
+#else
+  #set($query = {"match_all": {}})
+#end
 {
   "version": "2018-05-29",
   "method": "POST",
@@ -361,8 +375,9 @@ function searchMarketsRequestTemplate(): string {
     "body": {
       "from": $from,
       "size": $pageSize,
+      "track_total_hits": true,
       "sort": $util.toJson($sort),
-      "query": { "bool": { "must": $util.toJson($must), "filter": $util.toJson($filter) } }
+      "query": $util.toJson($query)
     }
   }
 }`;
@@ -372,15 +387,19 @@ function searchMarketsResponseTemplate(): string {
   return `
 #set($body = $util.parseJson($ctx.result.body))
 #set($hits = $body.hits.hits)
+#set($total = $body.hits.total)
+#if(!$util.isNull($total.value))
+  #set($total = $total.value)
+#end
 {
   "items": [
     #foreach($hit in $hits)
     #set($hitId = $hit.get("_id"))
     #set($source = $hit.get("_source"))
-    { "id": "$hitId", "source": $util.toJson($source) }#if($foreach.hasNext),#end
+    { "id": $util.toJson($hitId), "source": $util.toJson($source) }#if($foreach.hasNext),#end
     #end
   ],
-  "total": $util.defaultIfNull($body.hits.total.value, 0),
+  "total": $util.defaultIfNull($total, 0),
   "nextToken": null
 }`;
 }
@@ -400,13 +419,17 @@ function getMarketResponseTemplate(): string {
 #if(!$body.found)
   null
 #else
+  #set($hitId = $body.get("_id"))
   #set($src = $body.get("_source"))
+  #set($raw = $src.raw)
+  #set($marketId = $util.defaultIfNull($src.marketId, $util.defaultIfNull($raw.marketId, $util.defaultIfNull($raw.id, $hitId))))
+  #set($eventId = $util.defaultIfNull($src.eventId, $raw.eventId))
   {
-    "marketId": "$src.marketId",
-    "name": $util.toJson($src.raw.name),
-    "eventId": $util.toJson($src.eventId),
-    "status": $util.toJson($src.raw.status),
-    "raw": $util.toJson($src.raw)
+    "marketId": $util.toJson($marketId),
+    "name": $util.toJson($raw.name),
+    "eventId": $util.toJson($eventId),
+    "status": $util.toJson($raw.status),
+    "raw": $util.toJson($raw)
   }
 #end`;
 }

@@ -64,8 +64,10 @@ public class BetDexMarketEnrichmentService {
     Instant now = Instant.now();
     for (PriceUpdate price : prices) {
       String eventId = price.eventId();
-      if (eventId != null && !eventId.isBlank() && !isCached(eventCache, eventId, now)) {
-        pendingEventIds.add(eventId);
+      if (eventId != null && !eventId.isBlank()) {
+        if (!isCached(eventCache, eventId, now)) {
+          pendingEventIds.add(eventId);
+        }
         continue;
       }
 
@@ -132,7 +134,13 @@ public class BetDexMarketEnrichmentService {
   }
 
   private void enrichByEventIds(List<String> eventIds) {
-    List<Map<String, Object>> markets = fetchMarketsByEventIds(eventIds);
+    Set<String> requestedEventIds = new HashSet<>(eventIds);
+    List<Map<String, Object>> markets = fetchMarketsByEventIds(eventIds).stream()
+        .filter(market -> {
+          String eventId = eventId(market);
+          return eventId == null || requestedEventIds.contains(eventId);
+        })
+        .toList();
     Instant now = Instant.now();
     for (Map<String, Object> market : markets) {
       String marketId = marketId(market);
@@ -277,6 +285,16 @@ public class BetDexMarketEnrichmentService {
 
   private String marketId(Map<String, Object> market) {
     for (String key : List.of("marketId", "id", "market_id")) {
+      Object value = market.get(key);
+      if (value != null && !value.toString().isBlank()) {
+        return value.toString();
+      }
+    }
+    return null;
+  }
+
+  private String eventId(Map<String, Object> market) {
+    for (String key : List.of("eventId", "event_id")) {
       Object value = market.get(key);
       if (value != null && !value.toString().isBlank()) {
         return value.toString();
