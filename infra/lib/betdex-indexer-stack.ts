@@ -262,6 +262,7 @@ export class BetDexIndexerStack extends Stack {
     });
 
     new cdk.CfnOutput(this, 'GraphqlApiUrl', { value: api.graphqlUrl });
+    new cdk.CfnOutput(this, 'GraphqlApiKey', { value: api.apiKey ?? '' });
     new cdk.CfnOutput(this, 'OpenSearchEndpoint', { value: `https://${domain.domainEndpoint}` });
     new cdk.CfnOutput(this, 'BetDexSecretArn', { value: betdexSecret.secretArn });
     new cdk.CfnOutput(this, 'EcrRepositoryUri', { value: imageRepository.repositoryUri });
@@ -301,19 +302,28 @@ function searchMarketsRequestTemplate(): string {
 #else
   $util.qr($must.add({"match_all":{}}))
 #end
-#foreach($field in ["eventId","categoryId","subCategoryId","status"])
+#foreach($field in ["eventId","categoryId","subCategoryId"])
   #if(!$util.isNull($input[$field]))
-    $util.qr($filter.add({"term":{"raw.$field":$input[$field]}}))
+    $util.qr($filter.add({"term":{"raw.$field.keyword":$input[$field]}}))
   #end
 #end
+#if(!$util.isNull($input.status))
+  $util.qr($filter.add({"terms":{"raw.status.keyword":[$input.status, $input.status.toUpperCase(), $input.status.toLowerCase()]}}))
+#end
 #if(!$util.isNull($input.categoryIds) && $input.categoryIds.size() > 0)
-  $util.qr($filter.add({"terms":{"raw.categoryId":$input.categoryIds}}))
+  $util.qr($filter.add({"terms":{"raw.categoryId.keyword":$input.categoryIds}}))
 #end
 #if(!$util.isNull($input.subCategoryIds) && $input.subCategoryIds.size() > 0)
-  $util.qr($filter.add({"terms":{"raw.subCategoryId":$input.subCategoryIds}}))
+  $util.qr($filter.add({"terms":{"raw.subCategoryId.keyword":$input.subCategoryIds}}))
 #end
 #if(!$util.isNull($input.statuses) && $input.statuses.size() > 0)
-  $util.qr($filter.add({"terms":{"raw.status":$input.statuses}}))
+  #set($statusTerms = [])
+  #foreach($status in $input.statuses)
+    $util.qr($statusTerms.add($status))
+    $util.qr($statusTerms.add($status.toUpperCase()))
+    $util.qr($statusTerms.add($status.toLowerCase()))
+  #end
+  $util.qr($filter.add({"terms":{"raw.status.keyword":$statusTerms}}))
 #end
 #if(!$util.isNull($input.inPlay) && $input.inPlay.size() > 0)
   #set($wantsLive = false)
@@ -326,9 +336,9 @@ function searchMarketsRequestTemplate(): string {
     #end
   #end
   #if($wantsLive && !$wantsPre)
-    $util.qr($filter.add({"term":{"raw.inPlayStatus":"InPlay"}}))
+    $util.qr($filter.add({"terms":{"raw.inPlayStatus.keyword":["InPlay","IN_PLAY","in-play","inplay"]}}))
   #elseif($wantsPre && !$wantsLive)
-    $util.qr($filter.add({"terms":{"raw.inPlayStatus":["NotApplicable","PrePlay"]}}))
+    $util.qr($filter.add({"terms":{"raw.inPlayStatus.keyword":["NotApplicable","PrePlay","NOT_APPLICABLE","PRE_PLAY","pre-play"]}}))
   #end
 #end
 #if($input.startsAfter || $input.startsBefore)

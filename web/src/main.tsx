@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { Search } from 'lucide-react';
-import { markets, searchMarkets } from './mockApi';
+import { dataSourceLabel, initialMarkets, searchMarkets } from './api';
 import type { InPlayFilter, Market, MarketSearchInput, MarketSearchResult, MarketSort, MarketStatus, PricePoint } from './types';
 import './styles.css';
 
@@ -16,9 +16,6 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
   minute: '2-digit'
 });
 
-const categories = Array.from(new Map(markets.map((market) => [market.categoryId, market.categoryName])).entries());
-const subCategories = Array.from(new Map(markets.map((market) => [market.subCategoryId, market.subCategoryName])).entries())
-  .sort((left, right) => left[1].localeCompare(right[1]));
 const betdexBaseUrl = 'https://betdex.com';
 const pageSizes = [10, 20, 50];
 
@@ -34,12 +31,14 @@ function App() {
     pageSize: 10
   });
   const [searchResult, setSearchResult] = React.useState<MarketSearchResult>({
-    items: markets.slice(0, 10),
-    total: markets.length,
+    items: initialMarkets,
+    total: initialMarkets.length,
     page: 1,
     pageSize: 10
   });
+  const [filterOptions, setFilterOptions] = React.useState(() => deriveFilterOptions(initialMarkets));
   const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
 
   const totalPages = Math.max(1, Math.ceil(searchResult.total / searchResult.pageSize));
   const firstResult = searchResult.total === 0 ? 0 : (searchResult.page - 1) * searchResult.pageSize + 1;
@@ -48,9 +47,16 @@ function App() {
   React.useEffect(() => {
     let active = true;
     setLoading(true);
+    setError(null);
     searchMarkets(filters).then((result) => {
       if (active) {
         setSearchResult(result);
+        setFilterOptions((current) => mergeFilterOptions(current, deriveFilterOptions(result.items)));
+        setLoading(false);
+      }
+    }).catch((reason: unknown) => {
+      if (active) {
+        setError(reason instanceof Error ? reason.message : 'Search failed');
         setLoading(false);
       }
     });
@@ -76,7 +82,7 @@ function App() {
         </div>
         <div className="topbar-meta">
           <span>{loading ? 'Searching' : `${searchResult.total} markets`}</span>
-          <span>Mock data</span>
+          <span>{dataSourceLabel}</span>
         </div>
       </header>
 
@@ -101,13 +107,13 @@ function App() {
         <aside className="filter-panel" aria-label="Market filters">
           <FilterGroup
             label="Sport"
-            values={categories.map(([id, name]) => ({ value: id, label: name }))}
+            values={filterOptions.categories}
             selected={filters.categoryIds}
             onChange={(categoryIds) => updateFilters({ categoryIds })}
           />
           <FilterGroup
             label="League"
-            values={subCategories.map(([id, name]) => ({ value: id, label: name }))}
+            values={filterOptions.subCategories}
             selected={filters.subCategoryIds}
             onChange={(subCategoryIds) => updateFilters({ subCategoryIds })}
           />
@@ -136,6 +142,7 @@ function App() {
           </div>
 
           <div className="market-list">
+            {error && <p className="empty-state">Search failed: {error}</p>}
             {searchResult.items.map((market) => (
               <MarketRow key={market.marketId} market={market} />
             ))}
@@ -168,6 +175,8 @@ function App() {
 }
 
 function MarketRow({ market }: { market: Market }) {
+  const startsAt = new Date(market.startsAt);
+
   return (
     <article className="market-row">
       <div className="market-info">
@@ -178,7 +187,7 @@ function MarketRow({ market }: { market: Market }) {
         </div>
         <p>{market.name} · {market.categoryName} · {market.subCategoryName}</p>
         <div className="market-meta">
-          <span>{dateFormatter.format(new Date(market.startsAt))}</span>
+          <span>{Number.isNaN(startsAt.getTime()) ? 'Time TBC' : dateFormatter.format(startsAt)}</span>
           <span>Liquidity ${numberFormatter.format(market.liquidity)}</span>
         </div>
       </div>
@@ -191,6 +200,7 @@ function MarketRow({ market }: { market: Market }) {
         {market.outcomes.map((price) => (
           <PriceLink key={price.outcomeId} market={market} price={price} />
         ))}
+        {market.outcomes.length === 0 && <MarketLink market={market} />}
       </div>
     </article>
   );
@@ -204,6 +214,18 @@ function PriceLink({ market, price }: { market: Market; price: PricePoint }) {
       <span>{price.outcomeName}</span>
       <strong>{price.price.toFixed(2)}</strong>
       <small>${numberFormatter.format(price.liquidity)}</small>
+    </a>
+  );
+}
+
+function MarketLink({ market }: { market: Market }) {
+  const href = `${betdexBaseUrl}/markets/${encodeURIComponent(market.marketId)}`;
+
+  return (
+    <a className="price-button" href={href} target="_blank" rel="noreferrer">
+      <span>Market</span>
+      <strong>Open</strong>
+      <small>BetDEX</small>
     </a>
   );
 }
@@ -271,6 +293,32 @@ function Select({ label, value, values, onChange }: { label: string; value: stri
 
 function Status({ status }: { status: string }) {
   return <span className={`status status-${status.toLowerCase()}`}>{status}</span>;
+}
+
+function deriveFilterOptions(items: Market[]) {
+  return {
+    categories: uniqueOptions(items.map((market) => ({ value: market.categoryId, label: market.categoryName }))),
+    subCategories: uniqueOptions(items.map((market) => ({ value: market.subCategoryId, label: market.subCategoryName })))
+  };
+}
+
+function mergeFilterOptions(left: FilterOptions, right: FilterOptions): FilterOptions {
+  return {
+    categories: uniqueOptions([...left.categories, ...right.categories]),
+    subCategories: uniqueOptions([...left.subCategories, ...right.subCategories])
+  };
+}
+
+function uniqueOptions(options: Array<{ value: string; label: string }>) {
+  return Array.from(new Map(options
+    .filter((option) => option.value && option.label)
+    .map((option) => [option.value, option])).values())
+    .sort((left, right) => left.label.localeCompare(right.label));
+}
+
+interface FilterOptions {
+  categories: Array<{ value: string; label: string }>;
+  subCategories: Array<{ value: string; label: string }>;
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

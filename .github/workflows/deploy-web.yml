@@ -44,12 +44,8 @@ jobs:
         working-directory: web
         run: npm ci
 
-      - name: Build web
-        working-directory: web
-        run: npm run build
-
-      - name: Read web hosting outputs
-        id: hosting
+      - name: Read web stack outputs
+        id: stack_outputs
         run: |
           WEB_BUCKET=$(aws cloudformation describe-stacks \
             --stack-name "${{ inputs.stack_name }}" \
@@ -59,6 +55,14 @@ jobs:
             --stack-name "${{ inputs.stack_name }}" \
             --query "Stacks[0].Outputs[?OutputKey=='WebDistributionId'].OutputValue" \
             --output text)
+          GRAPHQL_API_URL=$(aws cloudformation describe-stacks \
+            --stack-name "${{ inputs.stack_name }}" \
+            --query "Stacks[0].Outputs[?OutputKey=='GraphqlApiUrl'].OutputValue" \
+            --output text)
+          GRAPHQL_API_KEY=$(aws cloudformation describe-stacks \
+            --stack-name "${{ inputs.stack_name }}" \
+            --query "Stacks[0].Outputs[?OutputKey=='GraphqlApiKey'].OutputValue" \
+            --output text)
           if [ -z "$WEB_BUCKET" ] || [ "$WEB_BUCKET" = "None" ]; then
             echo "WebBucketName stack output was not found. Deploy infra first." >&2
             exit 1
@@ -67,11 +71,33 @@ jobs:
             echo "WebDistributionId stack output was not found. Deploy infra first." >&2
             exit 1
           fi
+          if [ -z "$GRAPHQL_API_URL" ] || [ "$GRAPHQL_API_URL" = "None" ]; then
+            echo "GraphqlApiUrl stack output was not found. Redeploy infra first." >&2
+            exit 1
+          fi
+          if [ -z "$GRAPHQL_API_KEY" ] || [ "$GRAPHQL_API_KEY" = "None" ]; then
+            echo "GraphqlApiKey stack output was not found. Redeploy infra first." >&2
+            exit 1
+          fi
           echo "web_bucket=$WEB_BUCKET" >> "$GITHUB_OUTPUT"
           echo "distribution_id=$DISTRIBUTION_ID" >> "$GITHUB_OUTPUT"
+          echo "graphql_api_url=$GRAPHQL_API_URL" >> "$GITHUB_OUTPUT"
+          echo "graphql_api_key=$GRAPHQL_API_KEY" >> "$GITHUB_OUTPUT"
+
+      - name: Configure web API endpoint
+        working-directory: web
+        run: |
+          {
+            echo "VITE_APPSYNC_GRAPHQL_URL=${{ steps.stack_outputs.outputs.graphql_api_url }}"
+            echo "VITE_APPSYNC_API_KEY=${{ steps.stack_outputs.outputs.graphql_api_key }}"
+          } > .env.production
+
+      - name: Build web
+        working-directory: web
+        run: npm run build
 
       - name: Upload web assets
-        run: aws s3 sync web/dist "s3://${{ steps.hosting.outputs.web_bucket }}" --delete
+        run: aws s3 sync web/dist "s3://${{ steps.stack_outputs.outputs.web_bucket }}" --delete
 
       - name: Invalidate CloudFront cache
-        run: aws cloudfront create-invalidation --distribution-id "${{ steps.hosting.outputs.distribution_id }}" --paths "/*"
+        run: aws cloudfront create-invalidation --distribution-id "${{ steps.stack_outputs.outputs.distribution_id }}" --paths "/*"
