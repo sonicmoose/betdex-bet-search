@@ -302,13 +302,17 @@ function searchMarketsRequestTemplate(): string {
 #else
   $util.qr($must.add({"match_all":{}}))
 #end
-#foreach($field in ["eventId","categoryId","subCategoryId"])
-  #if(!$util.isNull($input[$field]))
-    $util.qr($filter.add({"term":{"raw.$field.keyword":$input[$field]}}))
-  #end
+#if(!$util.isNull($input.eventId))
+  $util.qr($filter.add({"term":{"raw.eventId.keyword":$input.eventId}}))
+#end
+#if(!$util.isNull($input.categoryId))
+  $util.qr($filter.add({"term":{"raw.categoryId.keyword":$input.categoryId}}))
+#end
+#if(!$util.isNull($input.subCategoryId))
+  $util.qr($filter.add({"term":{"raw.subCategoryId.keyword":$input.subCategoryId}}))
 #end
 #if(!$util.isNull($input.status))
-  $util.qr($filter.add({"terms":{"raw.status.keyword":[$input.status, $input.status.toUpperCase(), $input.status.toLowerCase()]}}))
+  $util.qr($filter.add({"term":{"raw.status.keyword":$input.status}}))
 #end
 #if(!$util.isNull($input.categoryIds) && $input.categoryIds.size() > 0)
   $util.qr($filter.add({"terms":{"raw.categoryId.keyword":$input.categoryIds}}))
@@ -317,13 +321,7 @@ function searchMarketsRequestTemplate(): string {
   $util.qr($filter.add({"terms":{"raw.subCategoryId.keyword":$input.subCategoryIds}}))
 #end
 #if(!$util.isNull($input.statuses) && $input.statuses.size() > 0)
-  #set($statusTerms = [])
-  #foreach($status in $input.statuses)
-    $util.qr($statusTerms.add($status))
-    $util.qr($statusTerms.add($status.toUpperCase()))
-    $util.qr($statusTerms.add($status.toLowerCase()))
-  #end
-  $util.qr($filter.add({"terms":{"raw.status.keyword":$statusTerms}}))
+  $util.qr($filter.add({"terms":{"raw.status.keyword":$input.statuses}}))
 #end
 #if(!$util.isNull($input.inPlay) && $input.inPlay.size() > 0)
   #set($wantsLive = false)
@@ -336,9 +334,9 @@ function searchMarketsRequestTemplate(): string {
     #end
   #end
   #if($wantsLive && !$wantsPre)
-    $util.qr($filter.add({"terms":{"raw.inPlayStatus.keyword":["InPlay","IN_PLAY","in-play","inplay"]}}))
+    $util.qr($filter.add({"term":{"raw.inPlayStatus.keyword":"InPlay"}}))
   #elseif($wantsPre && !$wantsLive)
-    $util.qr($filter.add({"terms":{"raw.inPlayStatus.keyword":["NotApplicable","PrePlay","NOT_APPLICABLE","PRE_PLAY","pre-play"]}}))
+    $util.qr($filter.add({"terms":{"raw.inPlayStatus.keyword":["NotApplicable","PrePlay"]}}))
   #end
 #end
 #if($input.startsAfter || $input.startsBefore)
