@@ -80,7 +80,12 @@ class MarketMessageHandlerTest {
 
     @SuppressWarnings("unchecked")
     ArgumentCaptor<List<PriceUpdate>> listCaptor = ArgumentCaptor.forClass(List.class);
-    verify(timestreamWriter).writePrices(listCaptor.capture());
+    verify(openSearchWriter).upsertMarketPrices(listCaptor.capture());
     org.assertj.core.api.Assertions.assertThat(listCaptor.getValue()).hasSize(1);
+
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<List<PriceUpdate>> timestreamCaptor = ArgumentCaptor.forClass(List.class);
+    verify(timestreamWriter).writePrices(timestreamCaptor.capture());
+    org.assertj.core.api.Assertions.assertThat(timestreamCaptor.getValue()).hasSize(1);
   }
 }

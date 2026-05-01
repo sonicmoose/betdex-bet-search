@@ -15,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -98,6 +99,31 @@ public class OpenSearchWriter {
     post("/" + dailyIndex(properties.pricesAlias(), price.receivedAt()) + "/_doc", price.source());
   }
 
+  public void upsertMarketPrices(List<PriceUpdate> prices) {
+    if (prices.isEmpty() || prices.getFirst().marketId() == null) {
+      return;
+    }
+
+    PriceUpdate first = prices.getFirst();
+    Map<String, Object> document = currentPriceDocument(first, prices);
+    Map<String, Object> payload = Map.of(
+        "script", Map.of(
+            "lang", "painless",
+            "source", """
+                for (entry in params.patch.entrySet()) {
+                  if (entry.getKey() != 'raw') {
+                    ctx._source[entry.getKey()] = entry.getValue();
+                  }
+                }
+                if (ctx._source.raw == null) {
+                  ctx._source.raw = params.patch.raw;
+                }
+                """,
+            "params", Map.of("patch", document)),
+        "upsert", document);
+    post("/" + properties.marketsCurrentIndex() + "/_update/" + urlEncode(first.marketId()), payload);
+  }
+
   private Map<String, Object> currentDocument(String id, Instant receivedAt, Map<String, Object> payload) {
     Map<String, Object> document = new LinkedHashMap<>();
     document.put("id", id);
@@ -107,6 +133,55 @@ public class OpenSearchWriter {
     document.put("subCategoryId", payload.get("subCategoryId"));
     document.put("receivedAt", receivedAt.toString());
     document.put("raw", payload);
+    return document;
+  }
+
+  private Map<String, Object> currentPriceDocument(PriceUpdate first, List<PriceUpdate> prices) {
+    List<Map<String, Object>> latestPrices = prices.stream()
+        .map(this::latestPriceDocument)
+        .toList();
+
+    Map<String, Object> raw = new LinkedHashMap<>();
+    raw.put("marketId", first.marketId());
+    raw.put("eventId", first.eventId());
+    raw.put("eventGroupId", first.eventGroupId());
+    raw.put("categoryId", first.categoryId());
+    raw.put("categoryName", first.categoryId());
+    raw.put("subCategoryId", first.subCategoryId());
+    raw.put("subCategoryName", first.subCategoryId());
+    raw.put("name", first.marketId());
+    raw.put("eventName", first.eventId() == null ? first.marketId() : first.eventId());
+    raw.put("status", "Open");
+    raw.put("inPlayStatus", "NotApplicable");
+    raw.put("marketOutcomes", latestPrices);
+    raw.put("latestPriceUpdateType", first.updateType());
+
+    Map<String, Object> document = new LinkedHashMap<>();
+    document.put("id", first.marketId());
+    document.put("marketId", first.marketId());
+    document.put("eventId", first.eventId());
+    document.put("eventGroupId", first.eventGroupId());
+    document.put("categoryId", first.categoryId());
+    document.put("subCategoryId", first.subCategoryId());
+    document.put("receivedAt", first.receivedAt().toString());
+    document.put("latestPrices", latestPrices);
+    document.put("latestPriceUpdateType", first.updateType());
+    document.put("raw", raw);
+    return document;
+  }
+
+  private Map<String, Object> latestPriceDocument(PriceUpdate price) {
+    Map<String, Object> document = new LinkedHashMap<>();
+    document.put("outcomeId", price.outcomeId());
+    document.put("id", price.outcomeId());
+    document.put("name", price.outcomeId());
+    document.put("outcomeName", price.outcomeId());
+    document.put("side", price.side());
+    document.put("currencyId", price.currencyId());
+    document.put("price", price.price());
+    document.put("liquidity", price.liquidity());
+    document.put("change", price.change());
+    document.put("validAt", (price.validAt() == null ? price.receivedAt() : price.validAt()).toString());
     return document;
   }
 

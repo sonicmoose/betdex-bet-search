@@ -90,28 +90,30 @@ function toGraphqlSort(sort: MarketSort): string {
 }
 
 function toMarket(hitId: string, raw: Record<string, unknown>): Market {
-  const marketId = text(raw, 'marketId') ?? text(raw, 'id') ?? hitId;
-  const marketOutcomes = array(raw, 'marketOutcomes');
-  const outcomes = marketOutcomes.length > 0 ? marketOutcomes.map(toPricePoint) : [];
-  const liquidity = number(raw, 'liquidity') ?? sum(outcomes.map((outcome) => outcome.liquidity));
-  const eventName = text(raw, 'eventName') ?? text(raw, 'eventGroupName') ?? text(raw, 'eventId') ?? 'Unknown event';
+  const source = normalizeSource(raw);
+  const marketId = text(source, 'marketId') ?? text(source, 'id') ?? hitId;
+  const marketOutcomes = array(source, 'marketOutcomes');
+  const latestPrices = array(source, 'latestPrices');
+  const outcomes = (marketOutcomes.length > 0 ? marketOutcomes : latestPrices).map(toPricePoint);
+  const liquidity = number(source, 'liquidity') ?? sum(outcomes.map((outcome) => outcome.liquidity));
+  const eventName = text(source, 'eventName') ?? text(source, 'eventGroupName') ?? text(source, 'eventId') ?? 'Unknown event';
 
   return {
     marketId,
-    name: text(raw, 'name') ?? text(raw, 'marketName') ?? 'Market',
-    eventId: text(raw, 'eventId') ?? '',
+    name: text(source, 'name') ?? text(source, 'marketName') ?? 'Market',
+    eventId: text(source, 'eventId') ?? '',
     eventName,
-    categoryId: text(raw, 'categoryId') ?? '',
-    categoryName: text(raw, 'categoryName') ?? text(raw, 'categoryId') ?? 'Unknown sport',
-    subCategoryId: text(raw, 'subCategoryId') ?? '',
-    subCategoryName: text(raw, 'subCategoryName') ?? text(raw, 'subCategoryId') ?? 'Unknown league',
-    status: normalizeStatus(text(raw, 'status')),
-    inPlay: text(raw, 'inPlayStatus') === 'InPlay' || boolean(raw, 'inPlay'),
-    startsAt: text(raw, 'lockAt') ?? text(raw, 'expectedStartTime') ?? text(raw, 'startsAt') ?? new Date().toISOString(),
-    matched: number(raw, 'matched') ?? number(raw, 'totalMatched') ?? 0,
+    categoryId: text(source, 'categoryId') ?? '',
+    categoryName: text(source, 'categoryName') ?? text(source, 'categoryId') ?? 'Unknown sport',
+    subCategoryId: text(source, 'subCategoryId') ?? '',
+    subCategoryName: text(source, 'subCategoryName') ?? text(source, 'subCategoryId') ?? 'Unknown league',
+    status: normalizeStatus(text(source, 'status')),
+    inPlay: text(source, 'inPlayStatus') === 'InPlay' || boolean(source, 'inPlay'),
+    startsAt: text(source, 'lockAt') ?? text(source, 'expectedStartTime') ?? text(source, 'startsAt') ?? new Date().toISOString(),
+    matched: number(source, 'matched') ?? number(source, 'totalMatched') ?? 0,
     liquidity,
     outcomes,
-    raw
+    raw: source
   };
 }
 
@@ -135,6 +137,20 @@ function parseAwsJson(value: unknown): Record<string, unknown> {
     return isRecord(parsed) ? parsed : {};
   }
   return isRecord(value) ? value : {};
+}
+
+function normalizeSource(source: Record<string, unknown>): Record<string, unknown> {
+  const raw = source.raw;
+  if (!isRecord(raw)) {
+    return source;
+  }
+
+  return {
+    ...source,
+    ...raw,
+    latestPrices: source.latestPrices,
+    raw
+  };
 }
 
 function normalizeStatus(value: string | undefined): MarketStatus {

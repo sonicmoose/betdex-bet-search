@@ -377,7 +377,7 @@ function searchMarketsResponseTemplate(): string {
     #foreach($hit in $hits)
     #set($hitId = $hit.get("_id"))
     #set($source = $hit.get("_source"))
-    { "id": "$hitId", "source": $util.toJson($source.raw) }#if($foreach.hasNext),#end
+    { "id": "$hitId", "source": $util.toJson($source) }#if($foreach.hasNext),#end
     #end
   ],
   "total": $util.defaultIfNull($body.hits.total.value, 0),

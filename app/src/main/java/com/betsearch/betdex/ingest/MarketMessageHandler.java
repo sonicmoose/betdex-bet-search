@@ -87,6 +87,7 @@ public class MarketMessageHandler {
         for (PriceUpdate price : prices) {
           openSearchWriter.indexPrice(price);
         }
+        openSearchWriter.upsertMarketPrices(prices);
         timestreamWriter.writePrices(prices);
       }
       default -> {
