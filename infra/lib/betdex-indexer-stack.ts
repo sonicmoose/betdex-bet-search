@@ -300,19 +300,19 @@ function searchMarketsRequestTemplate(): string {
 #set($from = ($page - 1) * $pageSize)
 #if($input.text)
   #set($hasQuery = true)
-  $util.qr($must.add({"multi_match":{"query":$input.text,"fields":["raw.name^3","raw.eventName","raw.categoryName","raw.*"]}}))
+  $util.qr($must.add({"query_string":{"query":"*$input.text*","fields":["raw.name^4","raw.eventName^3","raw.categoryName","raw.subCategoryName","raw.marketName","raw.id","raw.marketId","raw.eventId"],"default_operator":"AND","analyze_wildcard":true}}))
 #end
 #if(!$util.isNull($input.eventId))
   #set($hasQuery = true)
-  $util.qr($filter.add({"term":{"raw.eventId.keyword":$input.eventId}}))
+  $util.qr($filter.add({"bool":{"should":[{"term":{"eventId.keyword":$input.eventId}},{"term":{"raw.eventId.keyword":$input.eventId}},{"term":{"raw.event_id.keyword":$input.eventId}}],"minimum_should_match":1}}))
 #end
 #if(!$util.isNull($input.categoryId))
   #set($hasQuery = true)
-  $util.qr($filter.add({"term":{"raw.categoryId.keyword":$input.categoryId}}))
+  $util.qr($filter.add({"bool":{"should":[{"term":{"categoryId.keyword":$input.categoryId}},{"term":{"raw.categoryId.keyword":$input.categoryId}},{"term":{"raw.category_id.keyword":$input.categoryId}}],"minimum_should_match":1}}))
 #end
 #if(!$util.isNull($input.subCategoryId))
   #set($hasQuery = true)
-  $util.qr($filter.add({"term":{"raw.subCategoryId.keyword":$input.subCategoryId}}))
+  $util.qr($filter.add({"bool":{"should":[{"term":{"subCategoryId.keyword":$input.subCategoryId}},{"term":{"raw.subCategoryId.keyword":$input.subCategoryId}},{"term":{"raw.subCategory_id.keyword":$input.subCategoryId}}],"minimum_should_match":1}}))
 #end
 #if(!$util.isNull($input.status))
   #set($hasQuery = true)
@@ -320,11 +320,11 @@ function searchMarketsRequestTemplate(): string {
 #end
 #if(!$util.isNull($input.categoryIds) && $input.categoryIds.size() > 0)
   #set($hasQuery = true)
-  $util.qr($filter.add({"terms":{"raw.categoryId.keyword":$input.categoryIds}}))
+  $util.qr($filter.add({"bool":{"should":[{"terms":{"categoryId.keyword":$input.categoryIds}},{"terms":{"raw.categoryId.keyword":$input.categoryIds}},{"terms":{"raw.category_id.keyword":$input.categoryIds}}],"minimum_should_match":1}}))
 #end
 #if(!$util.isNull($input.subCategoryIds) && $input.subCategoryIds.size() > 0)
   #set($hasQuery = true)
-  $util.qr($filter.add({"terms":{"raw.subCategoryId.keyword":$input.subCategoryIds}}))
+  $util.qr($filter.add({"bool":{"should":[{"terms":{"subCategoryId.keyword":$input.subCategoryIds}},{"terms":{"raw.subCategoryId.keyword":$input.subCategoryIds}},{"terms":{"raw.subCategory_id.keyword":$input.subCategoryIds}}],"minimum_should_match":1}}))
 #end
 #if(!$util.isNull($input.statuses) && $input.statuses.size() > 0)
   #set($hasQuery = true)
