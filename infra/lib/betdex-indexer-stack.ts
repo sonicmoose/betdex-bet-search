@@ -147,7 +147,7 @@ export class BetDexIndexerStack extends Stack {
           logGroup
         }),
         environment: {
-          BETDEX_REST_BASE_URL: this.node.tryGetContext('betdexRestBaseUrl') ?? 'https://sandbox.api.monacoprotocol.com',
+          BETDEX_REST_BASE_URL: this.node.tryGetContext('betdexRestBaseUrl') ?? 'https://sandbox.api.monacoprotocol.xyz',
           BETDEX_STREAM_URL: this.node.tryGetContext('betdexStreamUrl') ?? 'wss://sandbox.stream.api.monacoprotocol.xyz',
           OPENSEARCH_ENDPOINT: `https://${domain.domainEndpoint}`,
           TIMESTREAM_ENABLED: enableTimestream ? 'true' : 'false',
