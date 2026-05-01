@@ -105,8 +105,11 @@ public class BetDexWebSocketClient implements ApplicationRunner {
         });
   }
 
-  private void sendStartupFrames(WebSocket socket) {
+  private void sendAuthenticationFrame(WebSocket socket) {
     send(socket, Map.of("action", "authenticate", "accessToken", sessionClient.accessToken()));
+  }
+
+  private void sendSubscriptionFrames(WebSocket socket) {
     SUBSCRIPTION_TYPES.forEach(type -> send(socket, Map.of(
         "action", "subscribe",
         "subscriptionType", type,
@@ -239,6 +242,7 @@ public class BetDexWebSocketClient implements ApplicationRunner {
     private final AtomicBoolean closedByClient = new AtomicBoolean(false);
     private final AtomicBoolean ended = new AtomicBoolean(false);
     private final AtomicBoolean promoted = new AtomicBoolean(false);
+    private final AtomicBoolean subscriptionsSent = new AtomicBoolean(false);
 
     private Connection(long id, boolean replacement) {
       this.id = id;
@@ -249,12 +253,12 @@ public class BetDexWebSocketClient implements ApplicationRunner {
     public void onOpen(WebSocket webSocket) {
       socket.set(webSocket);
       WebSocket.Listener.super.onOpen(webSocket);
-      sendStartupFrames(webSocket);
+      sendAuthenticationFrame(webSocket);
       if (replacement) {
-        log.info("BetDEX replacement WebSocket connected and subscriptions sent; waiting for first message connection={}", id);
+        log.info("BetDEX replacement WebSocket connected and authentication sent; waiting for stream data connection={}", id);
       } else {
         promote(this, webSocket);
-        log.info("BetDEX WebSocket connected and subscriptions sent connection={}", id);
+        log.info("BetDEX WebSocket connected and authentication sent connection={}", id);
       }
     }
 
@@ -264,9 +268,19 @@ public class BetDexWebSocketClient implements ApplicationRunner {
       if (last) {
         String message = text.toString();
         text.setLength(0);
-        if (replacement && promoted.compareAndSet(false, true)) {
+        MessageKind kind = messageKind(message);
+        if (kind == MessageKind.AUTHENTICATED && subscriptionsSent.compareAndSet(false, true)) {
+          sendSubscriptionFrames(webSocket);
+          log.info("BetDEX WebSocket authenticated and subscriptions sent connection={}", id);
+        } else if (kind == MessageKind.SUBSCRIBE_NOT_AUTHENTICATED) {
+          log.warn("BetDEX stream rejected a subscription before authentication; re-authenticating connection={}", id);
+          subscriptionsSent.set(false);
+          sendAuthenticationFrame(webSocket);
+        }
+
+        if (replacement && kind == MessageKind.DATA && promoted.compareAndSet(false, true)) {
           promote(this, webSocket);
-          log.info("BetDEX replacement WebSocket received first message and is now active connection={}", id);
+          log.info("BetDEX replacement WebSocket received first data message and is now active connection={}", id);
         }
         offerDeduped(message);
       }
@@ -303,5 +317,36 @@ public class BetDexWebSocketClient implements ApplicationRunner {
         current.sendClose(WebSocket.NORMAL_CLOSURE, reason);
       }
     }
+
+    private MessageKind messageKind(String message) {
+      try {
+        JsonNode node = objectMapper.readTree(message);
+        String type = text(node, "type");
+        if ("AuthenticationUpdate".equals(type)) {
+          return MessageKind.AUTHENTICATED;
+        }
+        if ("SubscribeNotAuthenticatedUpdate".equals(type)) {
+          return MessageKind.SUBSCRIBE_NOT_AUTHENTICATED;
+        }
+        if ("SubscribeUpdate".equals(type)) {
+          return MessageKind.SUBSCRIBE_ACK;
+        }
+        return MessageKind.DATA;
+      } catch (JsonProcessingException e) {
+        return MessageKind.DATA;
+      }
+    }
+
+    private String text(JsonNode node, String field) {
+      JsonNode value = node.get(field);
+      return value == null || value.isNull() ? null : value.asText();
+    }
+  }
+
+  private enum MessageKind {
+    AUTHENTICATED,
+    SUBSCRIBE_ACK,
+    SUBSCRIBE_NOT_AUTHENTICATED,
+    DATA
   }
 }
