@@ -375,7 +375,9 @@ function searchMarketsResponseTemplate(): string {
 {
   "items": [
     #foreach($hit in $hits)
-    { "id": "$hit._id", "source": $util.toJson($hit._source.raw) }#if($foreach.hasNext),#end
+    #set($hitId = $hit.get("_id"))
+    #set($source = $hit.get("_source"))
+    { "id": "$hitId", "source": $util.toJson($source.raw) }#if($foreach.hasNext),#end
     #end
   ],
   "total": $util.defaultIfNull($body.hits.total.value, 0),
@@ -398,7 +400,7 @@ function getMarketResponseTemplate(): string {
 #if(!$body.found)
   null
 #else
-  #set($src = $body._source)
+  #set($src = $body.get("_source"))
   {
     "marketId": "$src.marketId",
     "name": $util.toJson($src.raw.name),
@@ -438,7 +440,7 @@ function getMarketUpdatesResponseTemplate(): string {
 #set($body = $util.parseJson($ctx.result.body))
 [
   #foreach($hit in $body.hits.hits)
-    #set($src = $hit._source)
+    #set($src = $hit.get("_source"))
     {
       "marketId": "$src.marketId",
       "messageType": "$src.messageType",
