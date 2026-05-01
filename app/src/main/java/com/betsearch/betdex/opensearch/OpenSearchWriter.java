@@ -86,6 +86,33 @@ public class OpenSearchWriter {
     upsert(properties.marketsCurrentIndex(), marketId, patch);
   }
 
+  public void enrichMarket(String marketId, Instant receivedAt, Map<String, Object> enrichment) {
+    if (marketId == null || enrichment.isEmpty()) {
+      return;
+    }
+
+    Map<String, Object> document = currentDocument(marketId, receivedAt, enrichment);
+    Map<String, Object> payload = Map.of(
+        "script", Map.of(
+            "lang", "painless",
+            "source", """
+                for (entry in params.patch.entrySet()) {
+                  if (entry.getKey() != 'raw') {
+                    ctx._source[entry.getKey()] = entry.getValue();
+                  }
+                }
+                if (ctx._source.raw == null) {
+                  ctx._source.raw = [:];
+                }
+                for (entry in params.patch.raw.entrySet()) {
+                  ctx._source.raw[entry.getKey()] = entry.getValue();
+                }
+                """,
+            "params", Map.of("patch", document)),
+        "upsert", document);
+    post("/" + properties.marketsCurrentIndex() + "/_update/" + urlEncode(marketId), payload);
+  }
+
   public void upsertEvent(String eventId, Instant receivedAt, Map<String, Object> payload) {
     if (eventId == null) {
       return;

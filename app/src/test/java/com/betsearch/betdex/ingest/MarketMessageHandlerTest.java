@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
+import com.betsearch.betdex.betdex.BetDexMarketEnrichmentService;
 import com.betsearch.betdex.opensearch.OpenSearchWriter;
 import com.betsearch.betdex.timestream.TimestreamWriter;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -17,10 +18,12 @@ import org.mockito.ArgumentCaptor;
 class MarketMessageHandlerTest {
   private final OpenSearchWriter openSearchWriter = mock(OpenSearchWriter.class);
   private final TimestreamWriter timestreamWriter = mock(TimestreamWriter.class);
+  private final BetDexMarketEnrichmentService marketEnrichmentService = mock(BetDexMarketEnrichmentService.class);
   private final MarketMessageHandler handler = new MarketMessageHandler(
       new ObjectMapper(),
       openSearchWriter,
       timestreamWriter,
+      marketEnrichmentService,
       new SimpleMeterRegistry());
 
   @Test
@@ -87,5 +90,10 @@ class MarketMessageHandlerTest {
     ArgumentCaptor<List<PriceUpdate>> timestreamCaptor = ArgumentCaptor.forClass(List.class);
     verify(timestreamWriter).writePrices(timestreamCaptor.capture());
     org.assertj.core.api.Assertions.assertThat(timestreamCaptor.getValue()).hasSize(1);
+
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<List<PriceUpdate>> enrichmentCaptor = ArgumentCaptor.forClass(List.class);
+    verify(marketEnrichmentService).requestMarketEnrichment(enrichmentCaptor.capture());
+    org.assertj.core.api.Assertions.assertThat(enrichmentCaptor.getValue()).hasSize(1);
   }
 }

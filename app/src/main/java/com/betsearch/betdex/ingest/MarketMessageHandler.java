@@ -1,5 +1,6 @@
 package com.betsearch.betdex.ingest;
 
+import com.betsearch.betdex.betdex.BetDexMarketEnrichmentService;
 import com.betsearch.betdex.opensearch.OpenSearchWriter;
 import com.betsearch.betdex.timestream.TimestreamWriter;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -27,6 +28,7 @@ public class MarketMessageHandler {
   private final ObjectMapper objectMapper;
   private final OpenSearchWriter openSearchWriter;
   private final TimestreamWriter timestreamWriter;
+  private final BetDexMarketEnrichmentService marketEnrichmentService;
   private final Counter indexedCounter;
   private final Counter failureCounter;
 
@@ -34,10 +36,12 @@ public class MarketMessageHandler {
       ObjectMapper objectMapper,
       OpenSearchWriter openSearchWriter,
       TimestreamWriter timestreamWriter,
+      BetDexMarketEnrichmentService marketEnrichmentService,
       MeterRegistry meterRegistry) {
     this.objectMapper = objectMapper;
     this.openSearchWriter = openSearchWriter;
     this.timestreamWriter = timestreamWriter;
+    this.marketEnrichmentService = marketEnrichmentService;
     this.indexedCounter = meterRegistry.counter("betdex.messages.indexed");
     this.failureCounter = meterRegistry.counter("betdex.messages.write_failures");
   }
@@ -88,6 +92,7 @@ public class MarketMessageHandler {
           openSearchWriter.indexPrice(price);
         }
         openSearchWriter.upsertMarketPrices(prices);
+        marketEnrichmentService.requestMarketEnrichment(prices);
         timestreamWriter.writePrices(prices);
       }
       default -> {

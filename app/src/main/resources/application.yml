@@ -4,6 +4,10 @@ betdex:
   app-key: ${BETDEX_APP_KEY:}
   api-key: ${BETDEX_API_KEY:}
   session-path: ${BETDEX_SESSION_PATH:/sessions}
+  markets-path: ${BETDEX_MARKETS_PATH:/markets}
+  markets-ids-param: ${BETDEX_MARKETS_IDS_PARAM:marketIds}
+  markets-batch-size: ${BETDEX_MARKETS_BATCH_SIZE:50}
+  market-cache-ttl: ${BETDEX_MARKET_CACHE_TTL:12h}
 
 aws:
   region: ${AWS_REGION:us-east-1}
