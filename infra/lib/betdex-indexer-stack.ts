@@ -24,7 +24,6 @@ export class BetDexIndexerStack extends Stack {
     const enableTimestream = this.node.tryGetContext('enableTimestream') === 'true';
 
     const imageRepository = new ecr.Repository(this, 'IndexerImageRepository', {
-      repositoryName: 'betdex-indexer',
       imageScanOnPush: true,
       lifecycleRules: [
         {
