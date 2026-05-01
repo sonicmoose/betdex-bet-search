@@ -54,7 +54,7 @@ npx cdk synth
 Deploy with a container image published to ECR and pass `imageUri`:
 
 ```bash
-npx cdk deploy -c imageUri=123456789012.dkr.ecr.eu-west-2.amazonaws.com/betdex-indexer:latest
+npx cdk deploy -c imageUri=123456789012.dkr.ecr.eu-west-1.amazonaws.com/betdex-indexer:latest
 ```
 
 The stack creates an ECR repository and static web hosting bucket/distribution. ECS/Fargate is only created when `imageUri` is passed, which keeps the first infra deploy lighter for personal-account testing.

@@ -7,6 +7,6 @@ const app = new cdk.App();
 new BetDexIndexerStack(app, 'BetDexIndexerStack', {
 	env: {
 	  account: process.env.CDK_DEFAULT_ACCOUNT,
-	  region: process.env.CDK_DEFAULT_REGION ?? 'eu-west-2'
+	  region: process.env.CDK_DEFAULT_REGION ?? 'eu-west-1'
 	}
 });
