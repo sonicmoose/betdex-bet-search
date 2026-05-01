@@ -10,8 +10,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PreDestroy;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -41,8 +41,10 @@ public class BetDexMarketEnrichmentService {
   private final ObjectMapper objectMapper;
   private final WebClient webClient;
   private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+  private final Set<String> pendingEventIds = ConcurrentHashMap.newKeySet();
   private final Set<String> pendingMarketIds = ConcurrentHashMap.newKeySet();
-  private final Map<String, Instant> cache = new ConcurrentHashMap<>();
+  private final Map<String, Instant> eventCache = new ConcurrentHashMap<>();
+  private final Map<String, Instant> marketCache = new ConcurrentHashMap<>();
   private final AtomicReference<ScheduledFuture<?>> scheduledFlush = new AtomicReference<>();
 
   public BetDexMarketEnrichmentService(
@@ -61,19 +63,24 @@ public class BetDexMarketEnrichmentService {
   public void requestMarketEnrichment(List<PriceUpdate> prices) {
     Instant now = Instant.now();
     for (PriceUpdate price : prices) {
-      String marketId = price.marketId();
-      if (marketId == null || marketId.isBlank() || isCached(marketId, now)) {
+      String eventId = price.eventId();
+      if (eventId != null && !eventId.isBlank() && !isCached(eventCache, eventId, now)) {
+        pendingEventIds.add(eventId);
         continue;
       }
-      pendingMarketIds.add(marketId);
+
+      String marketId = price.marketId();
+      if (marketId != null && !marketId.isBlank() && !isCached(marketCache, marketId, now)) {
+        pendingMarketIds.add(marketId);
+      }
     }
 
-    if (!pendingMarketIds.isEmpty()) {
+    if (!pendingEventIds.isEmpty() || !pendingMarketIds.isEmpty()) {
       scheduleFlush();
     }
   }
 
-  private boolean isCached(String marketId, Instant now) {
+  private boolean isCached(Map<String, Instant> cache, String marketId, Instant now) {
     Instant expiresAt = cache.get(marketId);
     if (expiresAt == null) {
       return false;
@@ -104,18 +111,47 @@ public class BetDexMarketEnrichmentService {
       log.warn("Failed to enrich BetDEX markets from REST API", e);
     }
 
-    if (!pendingMarketIds.isEmpty()) {
+    if (!pendingEventIds.isEmpty() || !pendingMarketIds.isEmpty()) {
       scheduleFlush();
     }
   }
 
   private void flush() {
-    List<String> marketIds = drainBatch();
+    List<String> eventIds = drainBatch(pendingEventIds);
+    if (!eventIds.isEmpty()) {
+      enrichByEventIds(eventIds);
+      return;
+    }
+
+    List<String> marketIds = drainBatch(pendingMarketIds);
     if (marketIds.isEmpty()) {
       return;
     }
 
-    List<Map<String, Object>> markets = fetchMarkets(marketIds);
+    enrichByMarketIds(marketIds);
+  }
+
+  private void enrichByEventIds(List<String> eventIds) {
+    List<Map<String, Object>> markets = fetchMarketsByEventIds(eventIds);
+    Instant now = Instant.now();
+    for (Map<String, Object> market : markets) {
+      String marketId = marketId(market);
+      if (marketId == null) {
+        continue;
+      }
+      cache(marketCache, marketId, now);
+      openSearchWriter.enrichMarket(marketId, now, market);
+    }
+
+    for (String eventId : eventIds) {
+      cache(eventCache, eventId, now);
+    }
+
+    log.info("Enriched {} BetDEX markets from REST API eventIds={}", markets.size(), eventIds.size());
+  }
+
+  private void enrichByMarketIds(List<String> marketIds) {
+    List<Map<String, Object>> markets = fetchMarketsByMarketIds(marketIds);
     Set<String> foundIds = new HashSet<>();
     Instant now = Instant.now();
 
@@ -125,38 +161,61 @@ public class BetDexMarketEnrichmentService {
         continue;
       }
       foundIds.add(marketId);
-      cache(marketId, now);
+      cache(marketCache, marketId, now);
       openSearchWriter.enrichMarket(marketId, now, market);
     }
 
     for (String marketId : marketIds) {
       if (!foundIds.contains(marketId)) {
-        cache(marketId, now);
+        cache(marketCache, marketId, now);
       }
     }
 
     log.info("Enriched {} BetDEX markets from REST API requested={}", foundIds.size(), marketIds.size());
   }
 
-  private List<String> drainBatch() {
+  private List<String> drainBatch(Set<String> pendingIds) {
     int batchSize = Math.max(1, properties.marketsBatchSize());
     List<String> batch = new ArrayList<>(batchSize);
-    for (String marketId : pendingMarketIds) {
+    for (String marketId : pendingIds) {
       if (batch.size() >= batchSize) {
         break;
       }
-      if (pendingMarketIds.remove(marketId)) {
+      if (pendingIds.remove(marketId)) {
         batch.add(marketId);
       }
     }
     return batch;
   }
 
-  private List<Map<String, Object>> fetchMarkets(List<String> marketIds) {
+  private List<Map<String, Object>> fetchMarketsByEventIds(List<String> eventIds) {
+    List<Map<String, Object>> result = new ArrayList<>();
+    int maxPages = Math.max(1, properties.marketsMaxPages());
+    int pageSize = Math.max(1, properties.marketsPageSize());
+    int firstPage = properties.marketsFirstPage();
+
+    for (int page = firstPage; page < firstPage + maxPages; page++) {
+      List<Map<String, Object>> markets = fetchMarkets(properties.marketsEventIdsParam(), eventIds, page, pageSize);
+      result.addAll(markets);
+      if (markets.size() < pageSize) {
+        break;
+      }
+    }
+
+    return result;
+  }
+
+  private List<Map<String, Object>> fetchMarketsByMarketIds(List<String> marketIds) {
+    return fetchMarkets(properties.marketsIdsParam(), marketIds, 1, Math.max(1, properties.marketsPageSize()));
+  }
+
+  private List<Map<String, Object>> fetchMarkets(String idsParam, List<String> ids, int page, int pageSize) {
     String response = webClient.get()
         .uri(uriBuilder -> uriBuilder
             .path(properties.marketsPath())
-            .queryParam(properties.marketsIdsParam(), String.join(",", marketIds))
+            .queryParam(idsParam, String.join(",", ids))
+            .queryParam(properties.marketsPageParam(), page)
+            .queryParam(properties.marketsPageSizeParam(), pageSize)
             .build())
         .header(HttpHeaders.AUTHORIZATION, "Bearer " + sessionClient.accessToken())
         .retrieve()
@@ -226,7 +285,7 @@ public class BetDexMarketEnrichmentService {
     return null;
   }
 
-  private void cache(String marketId, Instant now) {
+  private void cache(Map<String, Instant> cache, String marketId, Instant now) {
     cache.put(marketId, now.plus(properties.marketCacheTtl()));
   }
 

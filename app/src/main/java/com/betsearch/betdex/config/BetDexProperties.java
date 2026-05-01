@@ -12,7 +12,13 @@ public record BetDexProperties(
     String sessionPath,
     String marketsPath,
     String marketsIdsParam,
+    String marketsEventIdsParam,
+    String marketsPageParam,
+    String marketsPageSizeParam,
     int marketsBatchSize,
+    int marketsFirstPage,
+    int marketsPageSize,
+    int marketsMaxPages,
     Duration marketCacheTtl
 ) {
 }

@@ -6,7 +6,13 @@ betdex:
   session-path: ${BETDEX_SESSION_PATH:/sessions}
   markets-path: ${BETDEX_MARKETS_PATH:/markets}
   markets-ids-param: ${BETDEX_MARKETS_IDS_PARAM:marketIds}
+  markets-event-ids-param: ${BETDEX_MARKETS_EVENT_IDS_PARAM:eventIds}
+  markets-page-param: ${BETDEX_MARKETS_PAGE_PARAM:page}
+  markets-page-size-param: ${BETDEX_MARKETS_PAGE_SIZE_PARAM:pageSize}
   markets-batch-size: ${BETDEX_MARKETS_BATCH_SIZE:50}
+  markets-first-page: ${BETDEX_MARKETS_FIRST_PAGE:1}
+  markets-page-size: ${BETDEX_MARKETS_PAGE_SIZE:100}
+  markets-max-pages: ${BETDEX_MARKETS_MAX_PAGES:20}
   market-cache-ttl: ${BETDEX_MARKET_CACHE_TTL:12h}
 
 aws:
