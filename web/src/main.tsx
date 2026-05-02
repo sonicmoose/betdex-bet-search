@@ -18,14 +18,18 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
 
 const betdexBaseUrl = 'https://betdex.com';
 const pageSizes = [10, 20, 50];
+const defaultSportOptions = ['FOOTBALL', 'CRICKET', 'ICEHKY', 'MLB'].map((value) => ({ value, label: value }));
+const defaultLeagueOptions = ['ALGE', 'EFL', 'EPL', 'FIFAWC', 'LALIGA', 'LALIGA2', 'MLB', 'NHL'].map((value) => ({ value, label: value }));
+const sportIds = new Set(defaultSportOptions.map((option) => option.value));
+const nonLeagueIds = new Set(['SPORTS', 'FOOTBALL', 'CRICKET', 'ICEHKY']);
 
 function App() {
   const [filters, setFilters] = React.useState<MarketSearchInput>({
     text: '',
     statuses: [],
     inPlay: [],
-    categoryIds: [],
     subCategoryIds: [],
+    eventGroupIds: [],
     sort: 'Relevance',
     page: 1,
     pageSize: 10
@@ -107,15 +111,15 @@ function App() {
         <aside className="filter-panel" aria-label="Market filters">
           <FilterGroup
             label="Sport"
-            values={filterOptions.categories}
-            selected={filters.categoryIds}
-            onChange={(categoryIds) => updateFilters({ categoryIds })}
+            values={filterOptions.sports}
+            selected={filters.subCategoryIds}
+            onChange={(subCategoryIds) => updateFilters({ subCategoryIds })}
           />
           <FilterGroup
             label="League"
-            values={filterOptions.subCategories}
-            selected={filters.subCategoryIds}
-            onChange={(subCategoryIds) => updateFilters({ subCategoryIds })}
+            values={filterOptions.leagues}
+            selected={filters.eventGroupIds}
+            onChange={(eventGroupIds) => updateFilters({ eventGroupIds })}
           />
           <FilterGroup
             label="Status"
@@ -185,7 +189,7 @@ function MarketRow({ market }: { market: Market }) {
           {market.inPlay && <span className="live-pill">Live</span>}
           <Status status={market.status} />
         </div>
-        <p>{market.name} · {market.categoryName} · {market.subCategoryName}</p>
+        <p>{market.name} · Sport {market.subCategoryId || 'Unknown'} · League {market.eventGroupId || 'Unknown'}</p>
         <div className="market-meta">
           <span>{Number.isNaN(startsAt.getTime()) ? 'Time TBC' : dateFormatter.format(startsAt)}</span>
           <span>Liquidity ${numberFormatter.format(market.liquidity)}</span>
@@ -297,15 +301,25 @@ function Status({ status }: { status: string }) {
 
 function deriveFilterOptions(items: Market[]) {
   return {
-    categories: uniqueOptions(items.map((market) => ({ value: market.categoryId, label: market.categoryName }))),
-    subCategories: uniqueOptions(items.map((market) => ({ value: market.subCategoryId, label: market.subCategoryName })))
+    sports: uniqueOptions([
+      ...defaultSportOptions,
+      ...items
+        .filter((market) => sportIds.has(market.subCategoryId))
+        .map((market) => ({ value: market.subCategoryId, label: market.subCategoryId }))
+    ]),
+    leagues: uniqueOptions([
+      ...defaultLeagueOptions,
+      ...items
+        .filter((market) => isBetdexId(market.eventGroupId) && !nonLeagueIds.has(market.eventGroupId))
+        .map((market) => ({ value: market.eventGroupId, label: market.eventGroupId }))
+    ])
   };
 }
 
 function mergeFilterOptions(left: FilterOptions, right: FilterOptions): FilterOptions {
   return {
-    categories: uniqueOptions([...left.categories, ...right.categories]),
-    subCategories: uniqueOptions([...left.subCategories, ...right.subCategories])
+    sports: uniqueOptions([...left.sports, ...right.sports]),
+    leagues: uniqueOptions([...left.leagues, ...right.leagues])
   };
 }
 
@@ -316,9 +330,13 @@ function uniqueOptions(options: Array<{ value: string; label: string }>) {
     .sort((left, right) => left.label.localeCompare(right.label));
 }
 
+function isBetdexId(value: string) {
+  return /^[A-Z0-9]+$/.test(value);
+}
+
 interface FilterOptions {
-  categories: Array<{ value: string; label: string }>;
-  subCategories: Array<{ value: string; label: string }>;
+  sports: Array<{ value: string; label: string }>;
+  leagues: Array<{ value: string; label: string }>;
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

@@ -6,8 +6,8 @@ export interface MarketSearchInput {
   text: string;
   statuses: MarketStatus[];
   inPlay: InPlayFilter[];
-  categoryIds: string[];
   subCategoryIds: string[];
+  eventGroupIds: string[];
   sort: MarketSort;
   page: number;
   pageSize: number;
@@ -24,6 +24,7 @@ export interface Market {
   marketId: string;
   name: string;
   eventId: string;
+  eventGroupId: string;
   eventName: string;
   categoryId: string;
   categoryName: string;

@@ -65,8 +65,8 @@ export async function searchMarkets(input: MarketSearchInput): Promise<MarketSea
 function toGraphqlInput(input: MarketSearchInput) {
   return {
     text: input.text.trim() || undefined,
-    categoryIds: input.categoryIds.length ? input.categoryIds : undefined,
     subCategoryIds: input.subCategoryIds.length ? input.subCategoryIds : undefined,
+    eventGroupIds: input.eventGroupIds.length ? input.eventGroupIds : undefined,
     statuses: input.statuses.length ? input.statuses : undefined,
     inPlay: input.inPlay.length ? input.inPlay.map((value) => value === 'Yes') : undefined,
     sort: toGraphqlSort(input.sort),
@@ -101,12 +101,13 @@ function toMarket(hitId: string, raw: Record<string, unknown>): Market {
   return {
     marketId,
     name: text(source, 'name') ?? text(source, 'marketName') ?? 'Market',
-    eventId: text(source, 'eventId') ?? '',
+    eventId: text(source, 'eventId') ?? text(source, 'event_id') ?? '',
+    eventGroupId: text(source, 'eventGroupId') ?? text(source, 'eventGroup_id') ?? '',
     eventName,
-    categoryId: text(source, 'categoryId') ?? '',
-    categoryName: text(source, 'categoryName') ?? text(source, 'categoryId') ?? 'Unknown sport',
-    subCategoryId: text(source, 'subCategoryId') ?? '',
-    subCategoryName: text(source, 'subCategoryName') ?? text(source, 'subCategoryId') ?? 'Unknown league',
+    categoryId: text(source, 'categoryId') ?? text(source, 'category_id') ?? '',
+    categoryName: text(source, 'categoryName') ?? text(source, 'category_name') ?? text(source, 'categoryId') ?? text(source, 'category_id') ?? 'Unknown sport',
+    subCategoryId: text(source, 'subCategoryId') ?? text(source, 'subCategory_id') ?? '',
+    subCategoryName: text(source, 'subCategoryName') ?? text(source, 'subCategory_name') ?? text(source, 'subCategoryId') ?? text(source, 'subCategory_id') ?? 'Unknown league',
     status: normalizeStatus(text(source, 'status')),
     inPlay: text(source, 'inPlayStatus') === 'InPlay' || boolean(source, 'inPlay'),
     startsAt: text(source, 'lockAt') ?? text(source, 'expectedStartTime') ?? text(source, 'startsAt') ?? new Date().toISOString(),

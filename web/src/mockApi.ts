@@ -5,6 +5,7 @@ const now = Date.now();
 interface MarketSeed {
   categoryId: string;
   categoryName: string;
+  eventGroupId?: string;
   subCategoryId?: string;
   subCategoryName: string;
   eventName: string;
@@ -15,38 +16,26 @@ interface MarketSeed {
 }
 
 const seeds: MarketSeed[] = [
-  { categoryId: 'football', categoryName: 'Football', subCategoryName: 'Premier League', eventName: 'Arsenal v Chelsea', marketName: 'Match Winner', inPlay: true, startsInHours: -0.5 },
-  { categoryId: 'football', categoryName: 'Football', subCategoryName: 'Premier League', eventName: 'Liverpool v Manchester City', marketName: 'Total Goals', startsInHours: 20 },
-  { categoryId: 'football', categoryName: 'Football', subCategoryName: 'La Liga', eventName: 'Barcelona v Real Madrid', marketName: 'Match Winner', startsInHours: 28 },
-  { categoryId: 'football', categoryName: 'Football', subCategoryName: 'Champions League', eventName: 'Bayern Munich v Inter Milan', marketName: 'Both Teams To Score', startsInHours: 52 },
-  { categoryId: 'baseball', categoryName: 'Baseball', subCategoryName: 'MLB', eventName: 'San Francisco Giants v Los Angeles Dodgers', marketName: 'Total Runs', startsInHours: 24 },
-  { categoryId: 'baseball', categoryName: 'Baseball', subCategoryName: 'MLB', eventName: 'New York Yankees v Boston Red Sox', marketName: 'Moneyline', startsInHours: 6 },
-  { categoryId: 'baseball', categoryName: 'Baseball', subCategoryName: 'MLB', eventName: 'Chicago Cubs v St Louis Cardinals', marketName: 'Run Line', startsInHours: 30 },
-  { categoryId: 'baseball', categoryName: 'Baseball', subCategoryName: 'MLB', eventName: 'Atlanta Braves v New York Mets', marketName: 'Total Runs', inPlay: true, startsInHours: -1 },
-  { categoryId: 'baseball', categoryName: 'Baseball', subCategoryName: 'MLB', eventName: 'Houston Astros v Seattle Mariners', marketName: 'Moneyline', startsInHours: 12 },
-  { categoryId: 'baseball', categoryName: 'Baseball', subCategoryName: 'MLB', eventName: 'Texas Rangers v Oakland Athletics', marketName: 'First Five Innings', startsInHours: 18 },
-  { categoryId: 'american-football', categoryName: 'American Football', subCategoryName: 'NFL', eventName: 'Kansas City Chiefs v Las Vegas Raiders', marketName: 'Moneyline', startsInHours: 72 },
-  { categoryId: 'american-football', categoryName: 'American Football', subCategoryName: 'NFL', eventName: 'Dallas Cowboys v Philadelphia Eagles', marketName: 'Point Spread', startsInHours: 80 },
-  { categoryId: 'american-football', categoryName: 'American Football', subCategoryName: 'NFL', eventName: 'Buffalo Bills v Miami Dolphins', marketName: 'Total Points', startsInHours: 88 },
-  { categoryId: 'american-football', categoryName: 'American Football', subCategoryName: 'NFL', eventName: 'Green Bay Packers v Chicago Bears', marketName: 'Moneyline', startsInHours: 96 },
-  { categoryId: 'american-football', categoryName: 'American Football', subCategoryName: 'NFL', eventName: 'San Francisco 49ers v Seattle Seahawks', marketName: 'Point Spread', status: 'Suspended', startsInHours: 104 },
-  { categoryId: 'basketball', categoryName: 'Basketball', subCategoryName: 'NBA', eventName: 'Boston Celtics v New York Knicks', marketName: 'Point Spread', startsInHours: 5 },
-  { categoryId: 'basketball', categoryName: 'Basketball', subCategoryName: 'NBA', eventName: 'Los Angeles Lakers v Phoenix Suns', marketName: 'Moneyline', startsInHours: 9 },
-  { categoryId: 'basketball', categoryName: 'Basketball', subCategoryName: 'NBA', eventName: 'Denver Nuggets v Minnesota Timberwolves', marketName: 'Total Points', inPlay: true, startsInHours: -0.75 },
-  { categoryId: 'basketball', categoryName: 'Basketball', subCategoryName: 'EuroLeague', eventName: 'Real Madrid v Olympiacos', marketName: 'Moneyline', startsInHours: 34 },
-  { categoryId: 'tennis', categoryName: 'Tennis', subCategoryName: 'ATP', eventName: 'Miami Open Final', marketName: 'Match Winner', status: 'Suspended', inPlay: true, startsInHours: -2 },
-  { categoryId: 'tennis', categoryName: 'Tennis', subCategoryName: 'WTA', eventName: 'Swiatek v Gauff', marketName: 'Match Winner', startsInHours: 14 },
-  { categoryId: 'tennis', categoryName: 'Tennis', subCategoryName: 'ATP', eventName: 'Alcaraz v Sinner', marketName: 'Set Betting', startsInHours: 40 },
-  { categoryId: 'ice-hockey', categoryName: 'Ice Hockey', subCategoryName: 'NHL', eventName: 'Toronto Maple Leafs v Boston Bruins', marketName: 'Moneyline', startsInHours: 7 },
-  { categoryId: 'ice-hockey', categoryName: 'Ice Hockey', subCategoryName: 'NHL', eventName: 'New York Rangers v New Jersey Devils', marketName: 'Total Goals', startsInHours: 11 },
-  { categoryId: 'golf', categoryName: 'Golf', subCategoryName: 'PGA Tour', eventName: 'US Open', marketName: 'Tournament Winner', startsInHours: 120 },
-  { categoryId: 'cricket', categoryName: 'Cricket', subCategoryName: 'IPL', eventName: 'Mumbai Indians v Chennai Super Kings', marketName: 'Match Winner', startsInHours: 16 },
-  { categoryId: 'mma', categoryName: 'MMA', subCategoryName: 'UFC', eventName: 'Pereira v Ankalaev', marketName: 'Fight Winner', startsInHours: 58 },
-  { categoryId: 'rugby', categoryName: 'Rugby', subCategoryName: 'Six Nations', eventName: 'Ireland v France', marketName: 'Match Winner', startsInHours: 64 },
-  { categoryId: 'soccer-us', categoryName: 'Soccer', subCategoryName: 'MLS', eventName: 'Inter Miami v Atlanta United', marketName: 'Match Winner', startsInHours: 22 },
-  { categoryId: 'esports', categoryName: 'Esports', subCategoryName: 'Counter-Strike', eventName: 'NAVI v Vitality', marketName: 'Match Winner', startsInHours: 3 },
-  { categoryId: 'baseball', categoryName: 'Baseball', subCategoryName: 'MLB', eventName: 'Philadelphia Phillies v Washington Nationals', marketName: 'Moneyline', status: 'Closed', startsInHours: -26 },
-  { categoryId: 'american-football', categoryName: 'American Football', subCategoryName: 'NFL', eventName: 'Detroit Lions v Minnesota Vikings', marketName: 'Total Points', status: 'Settled', startsInHours: -48 }
+  { categoryId: 'SPORTS', categoryName: 'SPORTS', subCategoryId: 'FOOTBALL', eventGroupId: 'EPL', subCategoryName: 'FOOTBALL', eventName: 'Arsenal v Chelsea', marketName: 'Match Winner', inPlay: true, startsInHours: -0.5 },
+  { categoryId: 'SPORTS', categoryName: 'SPORTS', subCategoryId: 'FOOTBALL', eventGroupId: 'EPL', subCategoryName: 'FOOTBALL', eventName: 'Liverpool v Manchester City', marketName: 'Total Goals', startsInHours: 20 },
+  { categoryId: 'SPORTS', categoryName: 'SPORTS', subCategoryId: 'FOOTBALL', eventGroupId: 'LALIGA', subCategoryName: 'FOOTBALL', eventName: 'Barcelona v Real Madrid', marketName: 'Match Winner', startsInHours: 28 },
+  { categoryId: 'SPORTS', categoryName: 'SPORTS', subCategoryId: 'FOOTBALL', eventGroupId: 'FIFAWC', subCategoryName: 'FOOTBALL', eventName: 'Bayern Munich v Inter Milan', marketName: 'Both Teams To Score', startsInHours: 52 },
+  { categoryId: 'SPORTS', categoryName: 'SPORTS', subCategoryId: 'MLB', eventGroupId: 'MLB', subCategoryName: 'MLB', eventName: 'San Francisco Giants v Los Angeles Dodgers', marketName: 'Total Runs', startsInHours: 24 },
+  { categoryId: 'SPORTS', categoryName: 'SPORTS', subCategoryId: 'MLB', eventGroupId: 'MLB', subCategoryName: 'MLB', eventName: 'New York Yankees v Boston Red Sox', marketName: 'Moneyline', startsInHours: 6 },
+  { categoryId: 'SPORTS', categoryName: 'SPORTS', subCategoryId: 'MLB', eventGroupId: 'MLB', subCategoryName: 'MLB', eventName: 'Chicago Cubs v St Louis Cardinals', marketName: 'Run Line', startsInHours: 30 },
+  { categoryId: 'SPORTS', categoryName: 'SPORTS', subCategoryId: 'MLB', eventGroupId: 'MLB', subCategoryName: 'MLB', eventName: 'Atlanta Braves v New York Mets', marketName: 'Total Runs', inPlay: true, startsInHours: -1 },
+  { categoryId: 'SPORTS', categoryName: 'SPORTS', subCategoryId: 'MLB', eventGroupId: 'MLB', subCategoryName: 'MLB', eventName: 'Houston Astros v Seattle Mariners', marketName: 'Moneyline', startsInHours: 12 },
+  { categoryId: 'SPORTS', categoryName: 'SPORTS', subCategoryId: 'MLB', eventGroupId: 'MLB', subCategoryName: 'MLB', eventName: 'Texas Rangers v Oakland Athletics', marketName: 'First Five Innings', startsInHours: 18 },
+  { categoryId: 'SPORTS', categoryName: 'SPORTS', subCategoryId: 'FOOTBALL', eventGroupId: 'EFL', subCategoryName: 'FOOTBALL', eventName: 'Kansas City Chiefs v Las Vegas Raiders', marketName: 'Moneyline', startsInHours: 72 },
+  { categoryId: 'SPORTS', categoryName: 'SPORTS', subCategoryId: 'FOOTBALL', eventGroupId: 'EFL', subCategoryName: 'FOOTBALL', eventName: 'Dallas Cowboys v Philadelphia Eagles', marketName: 'Point Spread', startsInHours: 80 },
+  { categoryId: 'SPORTS', categoryName: 'SPORTS', subCategoryId: 'FOOTBALL', eventGroupId: 'EFL', subCategoryName: 'FOOTBALL', eventName: 'Buffalo Bills v Miami Dolphins', marketName: 'Total Points', startsInHours: 88 },
+  { categoryId: 'SPORTS', categoryName: 'SPORTS', subCategoryId: 'FOOTBALL', eventGroupId: 'EFL', subCategoryName: 'FOOTBALL', eventName: 'Green Bay Packers v Chicago Bears', marketName: 'Moneyline', startsInHours: 96 },
+  { categoryId: 'SPORTS', categoryName: 'SPORTS', subCategoryId: 'FOOTBALL', eventGroupId: 'EFL', subCategoryName: 'FOOTBALL', eventName: 'San Francisco 49ers v Seattle Seahawks', marketName: 'Point Spread', status: 'Suspended', startsInHours: 104 },
+  { categoryId: 'SPORTS', categoryName: 'SPORTS', subCategoryId: 'ICEHKY', eventGroupId: 'NHL', subCategoryName: 'ICEHKY', eventName: 'Toronto Maple Leafs v Boston Bruins', marketName: 'Moneyline', startsInHours: 7 },
+  { categoryId: 'SPORTS', categoryName: 'SPORTS', subCategoryId: 'ICEHKY', eventGroupId: 'NHL', subCategoryName: 'ICEHKY', eventName: 'New York Rangers v New Jersey Devils', marketName: 'Total Goals', startsInHours: 11 },
+  { categoryId: 'SPORTS', categoryName: 'SPORTS', subCategoryId: 'CRICKET', eventGroupId: 'IPL', subCategoryName: 'CRICKET', eventName: 'Mumbai Indians v Chennai Super Kings', marketName: 'Match Winner', startsInHours: 16 },
+  { categoryId: 'SPORTS', categoryName: 'SPORTS', subCategoryId: 'MLB', eventGroupId: 'MLB', subCategoryName: 'MLB', eventName: 'Philadelphia Phillies v Washington Nationals', marketName: 'Moneyline', status: 'Closed', startsInHours: -26 },
+  { categoryId: 'SPORTS', categoryName: 'SPORTS', subCategoryId: 'FOOTBALL', eventGroupId: 'EFL', subCategoryName: 'FOOTBALL', eventName: 'Detroit Lions v Minnesota Vikings', marketName: 'Total Points', status: 'Settled', startsInHours: -48 }
 ];
 
 export const markets: Market[] = seeds.map(createMarket);
@@ -59,15 +48,17 @@ export async function searchMarkets(input: MarketSearchInput): Promise<MarketSea
       market.name,
       market.eventName,
       market.categoryName,
+      market.subCategoryId,
       market.subCategoryName,
+      market.eventGroupId,
       ...market.outcomes.map((outcome) => outcome.outcomeName)
     ];
     const textMatch = !text || searchable.some((value) => value.toLowerCase().includes(text));
     const statusMatch = input.statuses.length === 0 || input.statuses.includes(market.status);
     const inPlayMatch = input.inPlay.length === 0 || input.inPlay.includes(market.inPlay ? 'Yes' : 'No');
-    const categoryMatch = input.categoryIds.length === 0 || input.categoryIds.includes(market.categoryId);
-    const leagueMatch = input.subCategoryIds.length === 0 || input.subCategoryIds.includes(market.subCategoryId);
-    return textMatch && statusMatch && inPlayMatch && categoryMatch && leagueMatch;
+    const sportMatch = input.subCategoryIds.length === 0 || input.subCategoryIds.includes(market.subCategoryId);
+    const leagueMatch = input.eventGroupIds.length === 0 || input.eventGroupIds.includes(market.eventGroupId);
+    return textMatch && statusMatch && inPlayMatch && sportMatch && leagueMatch;
   });
 
   const sorted = [...filtered].sort((left, right) => {
@@ -107,10 +98,11 @@ function createMarket(seed: MarketSeed, index: number): Market {
     marketId,
     name: seed.marketName,
     eventId: `evt-${slug(seed.eventName)}`,
+    eventGroupId: seed.eventGroupId ?? seed.subCategoryName,
     eventName: seed.eventName,
     categoryId: seed.categoryId,
     categoryName: seed.categoryName,
-    subCategoryId: seed.subCategoryId ?? slug(seed.subCategoryName),
+    subCategoryId: seed.subCategoryId ?? seed.subCategoryName,
     subCategoryName: seed.subCategoryName,
     status: seed.status ?? 'Open',
     inPlay: seed.inPlay ?? false,

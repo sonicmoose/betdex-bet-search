@@ -318,6 +318,10 @@ function searchMarketsRequestTemplate(): string {
   #set($hasQuery = true)
   $util.qr($filter.add({"bool":{"should":[{"term":{"subCategoryId.keyword":$input.subCategoryId}},{"term":{"subCategoryId":$input.subCategoryId}},{"match_phrase":{"subCategoryId":$input.subCategoryId}},{"term":{"raw.subCategoryId.keyword":$input.subCategoryId}},{"term":{"raw.subCategoryId":$input.subCategoryId}},{"match_phrase":{"raw.subCategoryId":$input.subCategoryId}},{"term":{"raw.subCategory_id.keyword":$input.subCategoryId}},{"term":{"raw.subCategory_id":$input.subCategoryId}},{"match_phrase":{"raw.subCategory_id":$input.subCategoryId}}],"minimum_should_match":1}}))
 #end
+#if(!$util.isNull($input.eventGroupId))
+  #set($hasQuery = true)
+  $util.qr($filter.add({"bool":{"should":[{"term":{"eventGroupId.keyword":$input.eventGroupId}},{"term":{"eventGroupId":$input.eventGroupId}},{"match_phrase":{"eventGroupId":$input.eventGroupId}},{"term":{"raw.eventGroupId.keyword":$input.eventGroupId}},{"term":{"raw.eventGroupId":$input.eventGroupId}},{"match_phrase":{"raw.eventGroupId":$input.eventGroupId}},{"term":{"raw.eventGroup_id.keyword":$input.eventGroupId}},{"term":{"raw.eventGroup_id":$input.eventGroupId}},{"match_phrase":{"raw.eventGroup_id":$input.eventGroupId}}],"minimum_should_match":1}}))
+#end
 #if(!$util.isNull($input.status))
   #set($hasQuery = true)
   $util.qr($filter.add({"term":{"raw.status.keyword":$input.status}}))
@@ -329,6 +333,10 @@ function searchMarketsRequestTemplate(): string {
 #if(!$util.isNull($input.subCategoryIds) && $input.subCategoryIds.size() > 0)
   #set($hasQuery = true)
   $util.qr($filter.add({"bool":{"should":[{"terms":{"subCategoryId.keyword":$input.subCategoryIds}},{"terms":{"subCategoryId":$input.subCategoryIds}},{"terms":{"raw.subCategoryId.keyword":$input.subCategoryIds}},{"terms":{"raw.subCategoryId":$input.subCategoryIds}},{"terms":{"raw.subCategory_id.keyword":$input.subCategoryIds}},{"terms":{"raw.subCategory_id":$input.subCategoryIds}}],"minimum_should_match":1}}))
+#end
+#if(!$util.isNull($input.eventGroupIds) && $input.eventGroupIds.size() > 0)
+  #set($hasQuery = true)
+  $util.qr($filter.add({"bool":{"should":[{"terms":{"eventGroupId.keyword":$input.eventGroupIds}},{"terms":{"eventGroupId":$input.eventGroupIds}},{"terms":{"raw.eventGroupId.keyword":$input.eventGroupIds}},{"terms":{"raw.eventGroupId":$input.eventGroupIds}},{"terms":{"raw.eventGroup_id.keyword":$input.eventGroupIds}},{"terms":{"raw.eventGroup_id":$input.eventGroupIds}}],"minimum_should_match":1}}))
 #end
 #if(!$util.isNull($input.statuses) && $input.statuses.size() > 0)
   #set($hasQuery = true)
