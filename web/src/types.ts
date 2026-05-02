@@ -4,7 +4,6 @@ export type MarketSort = 'Relevance' | 'Start time' | 'Matched' | 'Liquidity';
 
 export interface MarketSearchInput {
   text: string;
-  statuses: MarketStatus[];
   inPlay: InPlayFilter[];
   subCategoryIds: string[];
   eventGroupIds: string[];

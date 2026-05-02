@@ -66,8 +66,9 @@ function toGraphqlInput(input: MarketSearchInput) {
   return {
     text: input.text.trim() || undefined,
     subCategoryIds: input.subCategoryIds.length ? input.subCategoryIds : undefined,
-    eventGroupIds: input.eventGroupIds.length ? input.eventGroupIds : undefined,
-    statuses: input.statuses.length ? input.statuses : undefined,
+    eventGroupId: input.eventGroupIds.length === 1 ? input.eventGroupIds[0] : undefined,
+    eventGroupIds: input.eventGroupIds.length > 1 ? input.eventGroupIds : undefined,
+    status: 'Open',
     inPlay: input.inPlay.length ? input.inPlay.map((value) => value === 'Yes') : undefined,
     sort: toGraphqlSort(input.sort),
     page: input.page,

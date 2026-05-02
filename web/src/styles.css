@@ -280,7 +280,28 @@ select {
 .price-strip {
   display: grid;
   gap: 8px;
-  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(176px, 1fr));
+}
+
+.outcome-prices {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.outcome-name {
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quote-pair {
+  display: grid;
+  gap: 4px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .price-button {
@@ -297,9 +318,27 @@ select {
   text-decoration: none;
 }
 
-.price-button:hover {
+.price-button-for:hover,
+.price-button-against:hover {
   background: #c3e2ff;
   border-color: #78b9ec;
+}
+
+.price-button-against {
+  background: #ffe3eb;
+  border-color: #f8b4c8;
+}
+
+.price-button-against:hover {
+  background: #ffd1de;
+  border-color: #ef8eab;
+}
+
+.price-button-empty {
+  align-items: center;
+  background: #f1f5f9;
+  border-color: #d8e0ea;
+  color: #94a3b8;
 }
 
 .price-button span {

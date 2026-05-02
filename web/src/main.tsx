@@ -2,7 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { Search } from 'lucide-react';
 import { dataSourceLabel, initialMarkets, searchMarkets } from './api';
-import type { InPlayFilter, Market, MarketSearchInput, MarketSearchResult, MarketSort, MarketStatus, PricePoint } from './types';
+import type { InPlayFilter, Market, MarketSearchInput, MarketSearchResult, MarketSort, PricePoint } from './types';
 import './styles.css';
 
 const numberFormatter = new Intl.NumberFormat('en-US', {
@@ -26,7 +26,6 @@ const nonLeagueIds = new Set(['SPORTS', 'FOOTBALL', 'CRICKET', 'ICEHKY']);
 function App() {
   const [filters, setFilters] = React.useState<MarketSearchInput>({
     text: '',
-    statuses: [],
     inPlay: [],
     subCategoryIds: [],
     eventGroupIds: [],
@@ -122,12 +121,6 @@ function App() {
             onChange={(eventGroupIds) => updateFilters({ eventGroupIds })}
           />
           <FilterGroup
-            label="Status"
-            values={['Open', 'Suspended', 'Settled', 'Closed'].map((status) => ({ value: status, label: status }))}
-            selected={filters.statuses}
-            onChange={(statuses) => updateFilters({ statuses: statuses as MarketStatus[] })}
-          />
-          <FilterGroup
             label="In-play"
             values={[
               { value: 'Yes', label: 'Live' },
@@ -180,6 +173,7 @@ function App() {
 
 function MarketRow({ market }: { market: Market }) {
   const startsAt = new Date(market.startsAt);
+  const bestPrices = bestPricesByOutcome(market.outcomes);
 
   return (
     <article className="market-row">
@@ -201,21 +195,41 @@ function MarketRow({ market }: { market: Market }) {
       </div>
 
       <div className="price-strip" aria-label={`${market.eventName} prices`}>
-        {market.outcomes.map((price) => (
-          <PriceLink key={price.outcomeId} market={market} price={price} />
+        {bestPrices.map((outcome) => (
+          <OutcomePrices key={outcome.outcomeId} market={market} outcome={outcome} />
         ))}
-        {market.outcomes.length === 0 && <MarketLink market={market} />}
+        {bestPrices.length === 0 && <MarketLink market={market} />}
       </div>
     </article>
   );
 }
 
-function PriceLink({ market, price }: { market: Market; price: PricePoint }) {
-  const href = `${betdexBaseUrl}/markets/${encodeURIComponent(market.marketId)}?outcome=${encodeURIComponent(price.outcomeId)}`;
+function OutcomePrices({ market, outcome }: { market: Market; outcome: BestOutcomePrices }) {
+  return (
+    <div className="outcome-prices">
+      <span className="outcome-name">{outcome.outcomeName}</span>
+      <div className="quote-pair">
+        {outcome.back ? (
+          <PriceLink market={market} price={outcome.back} label="Back" />
+        ) : (
+          <span className="price-button price-button-empty">Back</span>
+        )}
+        {outcome.lay ? (
+          <PriceLink market={market} price={outcome.lay} label="Lay" />
+        ) : (
+          <span className="price-button price-button-empty">Lay</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PriceLink({ market, price, label }: { market: Market; price: PricePoint; label: string }) {
+  const href = `${betdexBaseUrl}/markets/${encodeURIComponent(market.marketId)}?outcome=${encodeURIComponent(price.outcomeId)}&side=${encodeURIComponent(price.side)}`;
 
   return (
-    <a className="price-button" href={href} target="_blank" rel="noreferrer">
-      <span>{price.outcomeName}</span>
+    <a className={`price-button price-button-${price.side.toLowerCase()}`} href={href} target="_blank" rel="noreferrer">
+      <span>{label}</span>
       <strong>{price.price.toFixed(2)}</strong>
       <small>${numberFormatter.format(price.liquidity)}</small>
     </a>
@@ -334,9 +348,40 @@ function isBetdexId(value: string) {
   return /^[A-Z0-9]+$/.test(value);
 }
 
+function bestPricesByOutcome(prices: PricePoint[]): BestOutcomePrices[] {
+  const grouped = new Map<string, BestOutcomePrices>();
+
+  for (const price of prices) {
+    const current = grouped.get(price.outcomeId) ?? {
+      outcomeId: price.outcomeId,
+      outcomeName: price.outcomeName,
+      back: undefined,
+      lay: undefined
+    };
+
+    if (price.side === 'For' && (!current.back || price.price > current.back.price)) {
+      current.back = price;
+    }
+    if (price.side === 'Against' && (!current.lay || price.price < current.lay.price)) {
+      current.lay = price;
+    }
+
+    grouped.set(price.outcomeId, current);
+  }
+
+  return Array.from(grouped.values());
+}
+
 interface FilterOptions {
   sports: Array<{ value: string; label: string }>;
   leagues: Array<{ value: string; label: string }>;
+}
+
+interface BestOutcomePrices {
+  outcomeId: string;
+  outcomeName: string;
+  back?: PricePoint;
+  lay?: PricePoint;
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

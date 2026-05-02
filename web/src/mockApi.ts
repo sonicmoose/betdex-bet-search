@@ -54,7 +54,7 @@ export async function searchMarkets(input: MarketSearchInput): Promise<MarketSea
       ...market.outcomes.map((outcome) => outcome.outcomeName)
     ];
     const textMatch = !text || searchable.some((value) => value.toLowerCase().includes(text));
-    const statusMatch = input.statuses.length === 0 || input.statuses.includes(market.status);
+    const statusMatch = market.status === 'Open';
     const inPlayMatch = input.inPlay.length === 0 || input.inPlay.includes(market.inPlay ? 'Yes' : 'No');
     const sportMatch = input.subCategoryIds.length === 0 || input.subCategoryIds.includes(market.subCategoryId);
     const leagueMatch = input.eventGroupIds.length === 0 || input.eventGroupIds.includes(market.eventGroupId);
@@ -109,7 +109,7 @@ function createMarket(seed: MarketSeed, index: number): Market {
     startsAt: startsAt.toISOString(),
     matched,
     liquidity,
-    outcomes: createOutcomes(seed, index),
+    outcomes: createOutcomes(seed, index).flatMap(withLayPrice),
     raw: {
       marketType: slug(seed.marketName).toUpperCase().replace(/-/g, '_'),
       currencyId: 'USDC',
@@ -175,6 +175,18 @@ function price(outcomeId: string, outcomeName: string, value: number, index: num
     change: Number((((index % 5) - 2) * 0.03).toFixed(2)),
     validAt
   };
+}
+
+function withLayPrice(back: PricePoint): PricePoint[] {
+  return [
+    back,
+    {
+      ...back,
+      side: 'Against',
+      price: Number((back.price + 0.04).toFixed(2)),
+      liquidity: Math.max(100, Math.round(back.liquidity * 0.82))
+    }
+  ];
 }
 
 function slug(value: string): string {
