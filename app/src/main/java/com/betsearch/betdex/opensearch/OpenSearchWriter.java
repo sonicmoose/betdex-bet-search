@@ -105,7 +105,29 @@ public class OpenSearchWriter {
                   ctx._source.raw = [:];
                 }
                 for (entry in params.patch.raw.entrySet()) {
-                  ctx._source.raw[entry.getKey()] = entry.getValue();
+                  if (entry.getKey() != 'marketOutcomes' && entry.getKey() != 'outcomes' && entry.getKey() != 'selections') {
+                    ctx._source.raw[entry.getKey()] = entry.getValue();
+                  }
+                }
+                if (params.patch.outcomeNames != null) {
+                  if (ctx._source.latestPrices != null) {
+                    for (price in ctx._source.latestPrices) {
+                      def name = params.patch.outcomeNames[price.outcomeId];
+                      if (name != null) {
+                        price.name = name;
+                        price.outcomeName = name;
+                      }
+                    }
+                  }
+                  if (ctx._source.raw.marketOutcomes != null) {
+                    for (price in ctx._source.raw.marketOutcomes) {
+                      def name = params.patch.outcomeNames[price.outcomeId];
+                      if (name != null) {
+                        price.name = name;
+                        price.outcomeName = name;
+                      }
+                    }
+                  }
                 }
                 """,
             "params", Map.of("patch", document)),
@@ -156,8 +178,13 @@ public class OpenSearchWriter {
     document.put("id", id);
     document.put("marketId", payload.get("marketId"));
     document.put("eventId", payload.get("eventId"));
+    document.put("eventGroupId", payload.get("eventGroupId"));
     document.put("categoryId", payload.get("categoryId"));
     document.put("subCategoryId", payload.get("subCategoryId"));
+    document.put("name", payload.get("name"));
+    document.put("eventName", payload.get("eventName"));
+    document.put("outcomeNames", payload.get("outcomeNames"));
+    document.put("outcomeSearchText", payload.get("outcomeSearchText"));
     document.put("receivedAt", receivedAt.toString());
     document.put("raw", payload);
     return document;

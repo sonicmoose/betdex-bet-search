@@ -136,9 +136,10 @@ public class BetDexMarketEnrichmentService {
   private void enrichByEventIds(List<String> eventIds) {
     Set<String> requestedEventIds = new HashSet<>(eventIds);
     List<Map<String, Object>> markets = fetchMarketsByEventIds(eventIds).stream()
+        .map(this::normalizeMarket)
         .filter(market -> {
           String eventId = eventId(market);
-          return eventId == null || requestedEventIds.contains(eventId);
+          return eventId != null && requestedEventIds.contains(eventId);
         })
         .toList();
     Instant now = Instant.now();
@@ -151,15 +152,28 @@ public class BetDexMarketEnrichmentService {
       openSearchWriter.enrichMarket(marketId, now, market);
     }
 
-    for (String eventId : eventIds) {
+    Set<String> enrichedEventIds = new HashSet<>();
+    for (Map<String, Object> market : markets) {
+      String eventId = eventId(market);
+      if (eventId != null) {
+        enrichedEventIds.add(eventId);
+      }
+    }
+    for (String eventId : enrichedEventIds) {
       cache(eventCache, eventId, now);
     }
 
-    log.info("Enriched {} BetDEX markets from REST API eventIds={}", markets.size(), eventIds.size());
+    log.info(
+        "Enriched {} BetDEX markets from REST API eventIds={} matchedEventIds={}",
+        markets.size(),
+        eventIds.size(),
+        enrichedEventIds.size());
   }
 
   private void enrichByMarketIds(List<String> marketIds) {
-    List<Map<String, Object>> markets = fetchMarketsByMarketIds(marketIds);
+    List<Map<String, Object>> markets = fetchMarketsByMarketIds(marketIds).stream()
+        .map(this::normalizeMarket)
+        .toList();
     Set<String> foundIds = new HashSet<>();
     Instant now = Instant.now();
 
@@ -255,6 +269,9 @@ public class BetDexMarketEnrichmentService {
     if (node.isArray()) {
       return arrayToMaps(node);
     }
+    if (!node.isObject()) {
+      return List.of();
+    }
     for (String field : List.of("markets", "items", "results", "data")) {
       JsonNode child = node.get(field);
       if (child != null) {
@@ -270,7 +287,18 @@ public class BetDexMarketEnrichmentService {
         }
       }
     }
-    return node.isObject() ? List.of(objectMapper.convertValue(node, MAP_TYPE)) : List.of();
+    if (looksLikeMarket(node)) {
+      return List.of(objectMapper.convertValue(node, MAP_TYPE));
+    }
+    List<Map<String, Object>> nested = new ArrayList<>();
+    node.fields().forEachRemaining(entry -> nested.addAll(marketList(entry.getValue())));
+    return nested;
+  }
+
+  private boolean looksLikeMarket(JsonNode node) {
+    return node.hasNonNull("marketId")
+        || node.hasNonNull("market_id")
+        || (node.hasNonNull("id") && (node.hasNonNull("name") || node.hasNonNull("marketName") || node.hasNonNull("market_name")));
   }
 
   private List<Map<String, Object>> arrayToMaps(JsonNode node) {
@@ -284,8 +312,53 @@ public class BetDexMarketEnrichmentService {
   }
 
   private String marketId(Map<String, Object> market) {
-    for (String key : List.of("marketId", "id", "market_id")) {
-      Object value = market.get(key);
+    return firstString(market, List.of("marketId", "market_id", "id"));
+  }
+
+  private String eventId(Map<String, Object> market) {
+    String direct = firstString(market, List.of("eventId", "event_id"));
+    if (direct != null) {
+      return direct;
+    }
+    return firstNestedString(market, List.of(
+        List.of("event", "eventId"),
+        List.of("event", "event_id"),
+        List.of("event", "id")));
+  }
+
+  private Map<String, Object> normalizeMarket(Map<String, Object> market) {
+    Map<String, Object> normalized = new LinkedHashMap<>(market);
+    putIfPresent(normalized, "marketId", marketId(market));
+    putIfPresent(normalized, "eventId", eventId(market));
+    putIfPresent(normalized, "eventGroupId", firstString(market, List.of("eventGroupId", "event_group_id", "leagueId", "league_id")));
+    putIfPresent(normalized, "categoryId", firstString(market, List.of("categoryId", "category_id")));
+    putIfPresent(normalized, "subCategoryId", firstString(market, List.of("subCategoryId", "sub_category_id", "sportId", "sport_id")));
+    putIfPresent(normalized, "name", firstString(market, List.of("name", "marketName", "market_name")));
+    putIfPresent(normalized, "eventName", eventName(market));
+    Map<String, String> outcomeNames = outcomeNames(market);
+    if (!outcomeNames.isEmpty()) {
+      normalized.put("outcomeNames", outcomeNames);
+      normalized.put("outcomeSearchText", String.join(" ", outcomeNames.values()));
+    }
+    return normalized;
+  }
+
+  private void putIfPresent(Map<String, Object> target, String key, String value) {
+    if (value != null && !value.isBlank()) {
+      target.put(key, value);
+    }
+  }
+
+  private String firstNestedString(Map<String, Object> source, List<List<String>> paths) {
+    for (List<String> path : paths) {
+      Object value = source;
+      for (String segment : path) {
+        if (!(value instanceof Map<?, ?> map)) {
+          value = null;
+          break;
+        }
+        value = map.get(segment);
+      }
       if (value != null && !value.toString().isBlank()) {
         return value.toString();
       }
@@ -293,9 +366,44 @@ public class BetDexMarketEnrichmentService {
     return null;
   }
 
-  private String eventId(Map<String, Object> market) {
-    for (String key : List.of("eventId", "event_id")) {
+  private String eventName(Map<String, Object> market) {
+    String direct = firstString(market, List.of("eventName", "event_name"));
+    if (direct != null) {
+      return direct;
+    }
+    return firstNestedString(market, List.of(
+        List.of("event", "name"),
+        List.of("event", "eventName"),
+        List.of("event", "event_name")));
+  }
+
+  private Map<String, String> outcomeNames(Map<String, Object> market) {
+    Map<String, String> names = new LinkedHashMap<>();
+    for (String key : List.of("marketOutcomes", "outcomes", "selections", "runners")) {
       Object value = market.get(key);
+      if (value instanceof List<?> list) {
+        addOutcomeNames(names, list);
+      }
+    }
+    return names;
+  }
+
+  private void addOutcomeNames(Map<String, String> names, List<?> outcomes) {
+    for (Object outcome : outcomes) {
+      if (!(outcome instanceof Map<?, ?> map)) {
+        continue;
+      }
+      String id = firstString(map, List.of("outcomeId", "outcome_id", "id", "selectionId", "selection_id"));
+      String name = firstString(map, List.of("outcomeName", "outcome_name", "name", "selectionName", "selection_name"));
+      if (id != null && name != null) {
+        names.put(id, name);
+      }
+    }
+  }
+
+  private String firstString(Map<?, ?> source, List<String> keys) {
+    for (String key : keys) {
+      Object value = source.get(key);
       if (value != null && !value.toString().isBlank()) {
         return value.toString();
       }

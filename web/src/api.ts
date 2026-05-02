@@ -95,9 +95,13 @@ function toMarket(hitId: string, raw: Record<string, unknown>): Market {
   const marketId = text(source, 'marketId') ?? text(source, 'id') ?? hitId;
   const marketOutcomes = array(source, 'marketOutcomes');
   const latestPrices = array(source, 'latestPrices');
-  const outcomes = (marketOutcomes.length > 0 ? marketOutcomes : latestPrices).map(toPricePoint);
+  const pricedMarketOutcomes = marketOutcomes.filter(hasPrice);
+  const outcomeNameLookup = stringMap(source, 'outcomeNames');
+  const outcomes = (pricedMarketOutcomes.length > 0 ? pricedMarketOutcomes : latestPrices)
+    .map((price, index) => toPricePoint(price, index, outcomeNameLookup));
   const liquidity = number(source, 'liquidity') ?? sum(outcomes.map((outcome) => outcome.liquidity));
-  const eventName = text(source, 'eventName') ?? text(source, 'eventGroupName') ?? text(source, 'eventId') ?? 'Unknown event';
+  const event = record(source, 'event');
+  const eventName = text(source, 'eventName') ?? text(source, 'event_name') ?? text(event, 'name') ?? text(source, 'eventGroupName') ?? text(source, 'eventId') ?? 'Unknown event';
 
   return {
     marketId,
@@ -119,12 +123,13 @@ function toMarket(hitId: string, raw: Record<string, unknown>): Market {
   };
 }
 
-function toPricePoint(raw: Record<string, unknown>, index: number): PricePoint {
+function toPricePoint(raw: Record<string, unknown>, index: number, outcomeNameLookup: Map<string, string>): PricePoint {
   const outcomeId = text(raw, 'outcomeId') ?? text(raw, 'id') ?? `outcome-${index}`;
+  const rawName = text(raw, 'name') ?? text(raw, 'outcomeName');
 
   return {
     outcomeId,
-    outcomeName: text(raw, 'name') ?? text(raw, 'outcomeName') ?? outcomeId,
+    outcomeName: outcomeNameLookup.get(outcomeId) ?? rawName ?? outcomeId,
     side: text(raw, 'side') === 'Against' ? 'Against' : 'For',
     price: number(raw, 'price') ?? number(raw, 'odds') ?? 0,
     liquidity: number(raw, 'liquidity') ?? 0,
@@ -196,6 +201,24 @@ function boolean(source: Record<string, unknown>, key: string): boolean {
 function array(source: Record<string, unknown>, key: string): Array<Record<string, unknown>> {
   const value = source[key];
   return Array.isArray(value) ? value.filter(isRecord) : [];
+}
+
+function record(source: Record<string, unknown>, key: string): Record<string, unknown> {
+  const value = source[key];
+  return isRecord(value) ? value : {};
+}
+
+function stringMap(source: Record<string, unknown>, key: string): Map<string, string> {
+  const value = source[key];
+  if (!isRecord(value)) {
+    return new Map();
+  }
+  return new Map(Object.entries(value)
+    .filter((entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1].length > 0));
+}
+
+function hasPrice(source: Record<string, unknown>): boolean {
+  return number(source, 'price') !== undefined || number(source, 'odds') !== undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
