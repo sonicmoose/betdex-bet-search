@@ -304,7 +304,7 @@ function searchMarketsRequestTemplate(): string {
 #set($from = ($page - 1) * $pageSize)
 #if($input.text)
   #set($hasQuery = true)
-  $util.qr($must.add({"query_string":{"query":"*$input.text*","fields":["raw.name^4","name^4","raw.eventName^3","eventName^3","raw.event.name^3","raw.categoryName","raw.subCategoryName","raw.marketName","raw.outcomeSearchText^2","outcomeSearchText^2","raw.marketOutcomes.name^2","raw.marketOutcomes.outcomeName^2","latestPrices.name^2","latestPrices.outcomeName^2","raw.id","raw.marketId","raw.eventId"],"default_operator":"AND","analyze_wildcard":true}}))
+  $util.qr($must.add({"query_string":{"query":"*$input.text*","fields":["raw.name^4","name^4","raw.eventName^3","eventName^3","raw.event.name^3","raw.categoryName","raw.subCategoryName","raw.marketName","raw.outcomeSearchText^2","outcomeSearchText^2","raw.enrichmentSearchText^2","enrichmentSearchText^2","raw.marketOutcomes.name^2","raw.marketOutcomes.outcomeName^2","latestPrices.name^2","latestPrices.outcomeName^2","raw.id","raw.marketId","raw.eventId"],"default_operator":"AND","analyze_wildcard":true}}))
 #end
 #if(!$util.isNull($input.eventId))
   #set($hasQuery = true)

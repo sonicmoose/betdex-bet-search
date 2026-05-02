@@ -215,7 +215,8 @@ public class OpenSearchWriter {
         "name",
         "eventName",
         "outcomeNames",
-        "outcomeSearchText")) {
+        "outcomeSearchText",
+        "enrichmentSearchText")) {
       Object value = enrichment.get(key);
       if (value != null) {
         document.put(key, value);
@@ -283,6 +284,7 @@ public class OpenSearchWriter {
     document.put("eventName", payload.get("eventName"));
     document.put("outcomeNames", payload.get("outcomeNames"));
     document.put("outcomeSearchText", payload.get("outcomeSearchText"));
+    document.put("enrichmentSearchText", payload.get("enrichmentSearchText"));
     document.put("receivedAt", receivedAt.toString());
     document.put("raw", payload);
     return document;

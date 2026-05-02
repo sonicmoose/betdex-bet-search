@@ -69,7 +69,6 @@ public class BetDexMarketEnrichmentService {
         if (!isCached(eventCache, eventId, now)) {
           pendingEventIds.add(eventId);
         }
-        continue;
       }
 
       String marketId = price.marketId();
@@ -266,6 +265,9 @@ public class BetDexMarketEnrichmentService {
     for (String eventId : enrichedEventIds) {
       cache(eventCache, eventId, now);
     }
+    if (markets.isEmpty()) {
+      log.warn("BetDEX REST event lookup returned no matching markets eventIds={}", eventIds);
+    }
     return markets;
   }
 
@@ -275,6 +277,9 @@ public class BetDexMarketEnrichmentService {
         .toList();
     for (Map<String, Object> market : markets) {
       cacheMarket(market, now);
+    }
+    if (markets.isEmpty()) {
+      log.warn("BetDEX REST market lookup returned no matching markets marketIds={}", marketIds);
     }
     return markets;
   }
@@ -299,6 +304,7 @@ public class BetDexMarketEnrichmentService {
 
     for (int page = firstPage; page < firstPage + maxPages; page++) {
       List<Map<String, Object>> markets = fetchMarkets(properties.marketsEventIdsParam(), eventIds, page, pageSize);
+      log.info("Fetched {} BetDEX markets from REST API by {} page={} requested={}", markets.size(), properties.marketsEventIdsParam(), page, eventIds.size());
       result.addAll(markets);
       if (markets.size() < pageSize) {
         break;
@@ -309,7 +315,9 @@ public class BetDexMarketEnrichmentService {
   }
 
   private List<Map<String, Object>> fetchMarketsByMarketIds(List<String> marketIds) {
-    return fetchMarkets(properties.marketsIdsParam(), marketIds, 1, Math.max(1, properties.marketsPageSize()));
+    List<Map<String, Object>> markets = fetchMarkets(properties.marketsIdsParam(), marketIds, 1, Math.max(1, properties.marketsPageSize()));
+    log.info("Fetched {} BetDEX markets from REST API by {} requested={}", markets.size(), properties.marketsIdsParam(), marketIds.size());
+    return markets;
   }
 
   private List<Map<String, Object>> fetchMarkets(String idsParam, List<String> ids, int page, int pageSize) {
@@ -414,13 +422,21 @@ public class BetDexMarketEnrichmentService {
     putIfPresent(normalized, "eventGroupId", firstString(market, List.of("eventGroupId", "event_group_id", "leagueId", "league_id")));
     putIfPresent(normalized, "categoryId", firstString(market, List.of("categoryId", "category_id")));
     putIfPresent(normalized, "subCategoryId", firstString(market, List.of("subCategoryId", "sub_category_id", "sportId", "sport_id")));
-    putIfPresent(normalized, "name", firstString(market, List.of("name", "marketName", "market_name")));
+    putIfPresent(normalized, "name", firstString(market, List.of("name", "marketName", "market_name", "displayName", "display_name", "title", "question")));
     putIfPresent(normalized, "eventName", eventName(market));
+    putIfPresent(normalized, "enrichmentSearchText", searchText(market));
     Map<String, String> outcomeNames = outcomeNames(market);
     if (!outcomeNames.isEmpty()) {
       normalized.put("outcomeNames", outcomeNames);
       normalized.put("outcomeSearchText", String.join(" ", outcomeNames.values()));
     }
+    log.info(
+        "Normalized BetDEX market enrichment marketId={} eventId={} name={} eventName={} outcomeNames={}",
+        normalized.get("marketId"),
+        normalized.get("eventId"),
+        normalized.get("name"),
+        normalized.get("eventName"),
+        outcomeNames.size());
     return normalized;
   }
 
@@ -454,6 +470,9 @@ public class BetDexMarketEnrichmentService {
     }
     return firstNestedString(market, List.of(
         List.of("event", "name"),
+        List.of("event", "title"),
+        List.of("event", "displayName"),
+        List.of("event", "display_name"),
         List.of("event", "eventName"),
         List.of("event", "event_name")));
   }
@@ -475,9 +494,39 @@ public class BetDexMarketEnrichmentService {
         continue;
       }
       String id = firstString(map, List.of("outcomeId", "outcome_id", "id", "selectionId", "selection_id"));
-      String name = firstString(map, List.of("outcomeName", "outcome_name", "name", "selectionName", "selection_name"));
+      String name = firstString(map, List.of("outcomeName", "outcome_name", "name", "selectionName", "selection_name", "displayName", "display_name", "title", "runnerName", "runner_name", "label"));
       if (id != null && name != null) {
         names.put(id, name);
+      }
+    }
+  }
+
+  private String searchText(Object value) {
+    List<String> values = new ArrayList<>();
+    collectSearchText(value, values);
+    return String.join(" ", values);
+  }
+
+  private void collectSearchText(Object value, List<String> values) {
+    if (value == null) {
+      return;
+    }
+    if (value instanceof String string && !string.isBlank()) {
+      values.add(string);
+      return;
+    }
+    if (value instanceof Number || value instanceof Boolean) {
+      return;
+    }
+    if (value instanceof Map<?, ?> map) {
+      for (Object nested : map.values()) {
+        collectSearchText(nested, values);
+      }
+      return;
+    }
+    if (value instanceof Iterable<?> iterable) {
+      for (Object nested : iterable) {
+        collectSearchText(nested, values);
       }
     }
   }
@@ -502,6 +551,7 @@ public class BetDexMarketEnrichmentService {
       return;
     }
     marketDetailsCache.put(marketId, new LinkedHashMap<>(market));
+    pendingMarketIds.remove(marketId);
     cache(marketCache, marketId, now);
   }
 
