@@ -210,12 +210,12 @@ function OutcomePrices({ market, outcome }: { market: Market; outcome: BestOutco
       <span className="outcome-name">{outcome.outcomeName}</span>
       <div className="quote-pair">
         {outcome.back ? (
-          <PriceLink market={market} price={outcome.back} label="Back" />
+          <PriceLink market={market} price={outcome.back} label="Back" displaySide="back" />
         ) : (
           <span className="price-button price-button-empty">Back</span>
         )}
         {outcome.lay ? (
-          <PriceLink market={market} price={outcome.lay} label="Lay" />
+          <PriceLink market={market} price={outcome.lay} label="Lay" displaySide="lay" />
         ) : (
           <span className="price-button price-button-empty">Lay</span>
         )}
@@ -224,11 +224,21 @@ function OutcomePrices({ market, outcome }: { market: Market; outcome: BestOutco
   );
 }
 
-function PriceLink({ market, price, label }: { market: Market; price: PricePoint; label: string }) {
+function PriceLink({
+  market,
+  price,
+  label,
+  displaySide
+}: {
+  market: Market;
+  price: PricePoint;
+  label: string;
+  displaySide: 'back' | 'lay';
+}) {
   const href = betdexMarketUrl(market);
 
   return (
-    <a className={`price-button price-button-${price.side.toLowerCase()}`} href={href} target="_blank" rel="noreferrer">
+    <a className={`price-button price-button-${displaySide}`} href={href} target="_blank" rel="noreferrer">
       <span>{label}</span>
       <strong>{price.price.toFixed(2)}</strong>
       <small>${numberFormatter.format(price.liquidity)}</small>
@@ -376,10 +386,10 @@ function bestPricesByOutcome(prices: PricePoint[]): BestOutcomePrices[] {
       lay: undefined
     };
 
-    if (price.side === 'For' && (!current.back || price.price > current.back.price)) {
+    if (price.side === 'Against' && (!current.back || price.price > current.back.price)) {
       current.back = price;
     }
-    if (price.side === 'Against' && (!current.lay || price.price < current.lay.price)) {
+    if (price.side === 'For' && (!current.lay || price.price < current.lay.price)) {
       current.lay = price;
     }
 

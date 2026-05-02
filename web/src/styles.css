@@ -318,18 +318,18 @@ select {
   text-decoration: none;
 }
 
-.price-button-for:hover,
-.price-button-against:hover {
+.price-button-back:hover,
+.price-button-lay:hover {
   background: #c3e2ff;
   border-color: #78b9ec;
 }
 
-.price-button-against {
+.price-button-lay {
   background: #ffe3eb;
   border-color: #f8b4c8;
 }
 
-.price-button-against:hover {
+.price-button-lay:hover {
   background: #ffd1de;
   border-color: #ef8eab;
 }
