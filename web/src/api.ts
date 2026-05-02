@@ -153,8 +153,8 @@ function normalizeSource(source: Record<string, unknown>): Record<string, unknow
   }
 
   return {
-    ...source,
     ...raw,
+    ...source,
     latestPrices: source.latestPrices,
     raw
   };

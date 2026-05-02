@@ -177,6 +177,21 @@ public class OpenSearchWriter {
                 }
                 if (ctx._source.raw == null) {
                   ctx._source.raw = params.patch.raw;
+                } else if (params.patch.name != null || params.patch.eventName != null || params.patch.outcomeNames != null) {
+                  for (entry in params.patch.raw.entrySet()) {
+                    if (entry.getKey() != 'marketOutcomes' && entry.getKey() != 'outcomes' && entry.getKey() != 'selections' && entry.getKey() != 'runners') {
+                      ctx._source.raw[entry.getKey()] = entry.getValue();
+                    }
+                  }
+                  if (params.patch.outcomeNames != null && ctx._source.raw.marketOutcomes != null) {
+                    for (price in ctx._source.raw.marketOutcomes) {
+                      def name = params.patch.outcomeNames[price.outcomeId];
+                      if (name != null) {
+                        price.name = name;
+                        price.outcomeName = name;
+                      }
+                    }
+                  }
                 }
                 """,
             "params", Map.of("patch", document)),

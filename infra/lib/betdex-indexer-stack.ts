@@ -439,9 +439,13 @@ function getMarketResponseTemplate(): string {
   #set($raw = $src.raw)
   #set($marketId = $util.defaultIfNull($src.marketId, $util.defaultIfNull($raw.marketId, $util.defaultIfNull($raw.id, $hitId))))
   #set($eventId = $util.defaultIfNull($src.eventId, $raw.eventId))
+  #set($name = $raw.name)
+  #if($util.isNull($name) || $name == $marketId)
+    #set($name = $util.defaultIfNull($src.name, $name))
+  #end
   {
     "marketId": $util.toJson($marketId),
-    "name": $util.toJson($raw.name),
+    "name": $util.toJson($name),
     "eventId": $util.toJson($eventId),
     "status": $util.toJson($raw.status),
     "raw": $util.toJson($raw)
