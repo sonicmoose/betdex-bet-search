@@ -304,15 +304,15 @@ function searchMarketsRequestTemplate(): string {
 #end
 #if(!$util.isNull($input.eventId))
   #set($hasQuery = true)
-  $util.qr($filter.add({"bool":{"should":[{"term":{"eventId.keyword":$input.eventId}},{"term":{"raw.eventId.keyword":$input.eventId}},{"term":{"raw.event_id.keyword":$input.eventId}}],"minimum_should_match":1}}))
+  $util.qr($filter.add({"bool":{"should":[{"term":{"eventId.keyword":$input.eventId}},{"term":{"eventId":$input.eventId}},{"match_phrase":{"eventId":$input.eventId}},{"term":{"raw.eventId.keyword":$input.eventId}},{"term":{"raw.eventId":$input.eventId}},{"match_phrase":{"raw.eventId":$input.eventId}},{"term":{"raw.event_id.keyword":$input.eventId}},{"term":{"raw.event_id":$input.eventId}},{"match_phrase":{"raw.event_id":$input.eventId}}],"minimum_should_match":1}}))
 #end
 #if(!$util.isNull($input.categoryId))
   #set($hasQuery = true)
-  $util.qr($filter.add({"bool":{"should":[{"term":{"categoryId.keyword":$input.categoryId}},{"term":{"raw.categoryId.keyword":$input.categoryId}},{"term":{"raw.category_id.keyword":$input.categoryId}}],"minimum_should_match":1}}))
+  $util.qr($filter.add({"bool":{"should":[{"term":{"categoryId.keyword":$input.categoryId}},{"term":{"categoryId":$input.categoryId}},{"match_phrase":{"categoryId":$input.categoryId}},{"term":{"raw.categoryId.keyword":$input.categoryId}},{"term":{"raw.categoryId":$input.categoryId}},{"match_phrase":{"raw.categoryId":$input.categoryId}},{"term":{"raw.category_id.keyword":$input.categoryId}},{"term":{"raw.category_id":$input.categoryId}},{"match_phrase":{"raw.category_id":$input.categoryId}}],"minimum_should_match":1}}))
 #end
 #if(!$util.isNull($input.subCategoryId))
   #set($hasQuery = true)
-  $util.qr($filter.add({"bool":{"should":[{"term":{"subCategoryId.keyword":$input.subCategoryId}},{"term":{"raw.subCategoryId.keyword":$input.subCategoryId}},{"term":{"raw.subCategory_id.keyword":$input.subCategoryId}}],"minimum_should_match":1}}))
+  $util.qr($filter.add({"bool":{"should":[{"term":{"subCategoryId.keyword":$input.subCategoryId}},{"term":{"subCategoryId":$input.subCategoryId}},{"match_phrase":{"subCategoryId":$input.subCategoryId}},{"term":{"raw.subCategoryId.keyword":$input.subCategoryId}},{"term":{"raw.subCategoryId":$input.subCategoryId}},{"match_phrase":{"raw.subCategoryId":$input.subCategoryId}},{"term":{"raw.subCategory_id.keyword":$input.subCategoryId}},{"term":{"raw.subCategory_id":$input.subCategoryId}},{"match_phrase":{"raw.subCategory_id":$input.subCategoryId}}],"minimum_should_match":1}}))
 #end
 #if(!$util.isNull($input.status))
   #set($hasQuery = true)
@@ -320,11 +320,11 @@ function searchMarketsRequestTemplate(): string {
 #end
 #if(!$util.isNull($input.categoryIds) && $input.categoryIds.size() > 0)
   #set($hasQuery = true)
-  $util.qr($filter.add({"bool":{"should":[{"terms":{"categoryId.keyword":$input.categoryIds}},{"terms":{"raw.categoryId.keyword":$input.categoryIds}},{"terms":{"raw.category_id.keyword":$input.categoryIds}}],"minimum_should_match":1}}))
+  $util.qr($filter.add({"bool":{"should":[{"terms":{"categoryId.keyword":$input.categoryIds}},{"terms":{"categoryId":$input.categoryIds}},{"terms":{"raw.categoryId.keyword":$input.categoryIds}},{"terms":{"raw.categoryId":$input.categoryIds}},{"terms":{"raw.category_id.keyword":$input.categoryIds}},{"terms":{"raw.category_id":$input.categoryIds}}],"minimum_should_match":1}}))
 #end
 #if(!$util.isNull($input.subCategoryIds) && $input.subCategoryIds.size() > 0)
   #set($hasQuery = true)
-  $util.qr($filter.add({"bool":{"should":[{"terms":{"subCategoryId.keyword":$input.subCategoryIds}},{"terms":{"raw.subCategoryId.keyword":$input.subCategoryIds}},{"terms":{"raw.subCategory_id.keyword":$input.subCategoryIds}}],"minimum_should_match":1}}))
+  $util.qr($filter.add({"bool":{"should":[{"terms":{"subCategoryId.keyword":$input.subCategoryIds}},{"terms":{"subCategoryId":$input.subCategoryIds}},{"terms":{"raw.subCategoryId.keyword":$input.subCategoryIds}},{"terms":{"raw.subCategoryId":$input.subCategoryIds}},{"terms":{"raw.subCategory_id.keyword":$input.subCategoryIds}},{"terms":{"raw.subCategory_id":$input.subCategoryIds}}],"minimum_should_match":1}}))
 #end
 #if(!$util.isNull($input.statuses) && $input.statuses.size() > 0)
   #set($hasQuery = true)
