@@ -45,6 +45,7 @@ public class BetDexMarketEnrichmentService {
   private final Set<String> pendingMarketIds = ConcurrentHashMap.newKeySet();
   private final Map<String, Instant> eventCache = new ConcurrentHashMap<>();
   private final Map<String, Instant> marketCache = new ConcurrentHashMap<>();
+  private final Map<String, Map<String, Object>> marketDetailsCache = new ConcurrentHashMap<>();
   private final AtomicReference<ScheduledFuture<?>> scheduledFlush = new AtomicReference<>();
 
   public BetDexMarketEnrichmentService(
@@ -80,6 +81,49 @@ public class BetDexMarketEnrichmentService {
     if (!pendingEventIds.isEmpty() || !pendingMarketIds.isEmpty()) {
       scheduleFlush();
     }
+  }
+
+  public Map<String, Object> enrichmentForPrices(List<PriceUpdate> prices) {
+    if (prices.isEmpty()) {
+      return Map.of();
+    }
+
+    PriceUpdate first = prices.getFirst();
+    Instant now = Instant.now();
+    String marketId = first.marketId();
+    if (marketId != null && !marketId.isBlank()) {
+      Map<String, Object> cached = cachedMarket(marketId, now);
+      if (!cached.isEmpty()) {
+        return cached;
+      }
+    }
+
+    String eventId = first.eventId();
+    if (eventId != null && !eventId.isBlank() && !isCached(eventCache, eventId, now)) {
+      try {
+        List<Map<String, Object>> markets = fetchAndCacheMarketsByEventIds(List.of(eventId), now);
+        Map<String, Object> match = matchingMarket(markets, marketId);
+        if (!match.isEmpty()) {
+          return match;
+        }
+      } catch (RuntimeException e) {
+        log.warn("Failed to synchronously enrich BetDEX market from event REST lookup marketId={} eventId={}", marketId, eventId, e);
+      }
+    }
+
+    if (marketId != null && !marketId.isBlank() && !isCached(marketCache, marketId, now)) {
+      try {
+        List<Map<String, Object>> markets = fetchAndCacheMarketsByMarketIds(List.of(marketId), now);
+        Map<String, Object> match = matchingMarket(markets, marketId);
+        if (!match.isEmpty()) {
+          return match;
+        }
+      } catch (RuntimeException e) {
+        log.warn("Failed to synchronously enrich BetDEX market from market REST lookup marketId={}", marketId, e);
+      }
+    }
+
+    return Map.of();
   }
 
   private boolean isCached(Map<String, Instant> cache, String marketId, Instant now) {
@@ -134,21 +178,13 @@ public class BetDexMarketEnrichmentService {
   }
 
   private void enrichByEventIds(List<String> eventIds) {
-    Set<String> requestedEventIds = new HashSet<>(eventIds);
-    List<Map<String, Object>> markets = fetchMarketsByEventIds(eventIds).stream()
-        .map(this::normalizeMarket)
-        .filter(market -> {
-          String eventId = eventId(market);
-          return eventId != null && requestedEventIds.contains(eventId);
-        })
-        .toList();
     Instant now = Instant.now();
+    List<Map<String, Object>> markets = fetchAndCacheMarketsByEventIds(eventIds, now);
     for (Map<String, Object> market : markets) {
       String marketId = marketId(market);
       if (marketId == null) {
         continue;
       }
-      cache(marketCache, marketId, now);
       openSearchWriter.enrichMarket(marketId, now, market);
     }
 
@@ -171,11 +207,9 @@ public class BetDexMarketEnrichmentService {
   }
 
   private void enrichByMarketIds(List<String> marketIds) {
-    List<Map<String, Object>> markets = fetchMarketsByMarketIds(marketIds).stream()
-        .map(this::normalizeMarket)
-        .toList();
-    Set<String> foundIds = new HashSet<>();
     Instant now = Instant.now();
+    List<Map<String, Object>> markets = fetchAndCacheMarketsByMarketIds(marketIds, now);
+    Set<String> foundIds = new HashSet<>();
 
     for (Map<String, Object> market : markets) {
       String marketId = marketId(market);
@@ -183,7 +217,6 @@ public class BetDexMarketEnrichmentService {
         continue;
       }
       foundIds.add(marketId);
-      cache(marketCache, marketId, now);
       openSearchWriter.enrichMarket(marketId, now, market);
     }
 
@@ -208,6 +241,54 @@ public class BetDexMarketEnrichmentService {
       }
     }
     return batch;
+  }
+
+  private List<Map<String, Object>> fetchAndCacheMarketsByEventIds(List<String> eventIds, Instant now) {
+    Set<String> requestedEventIds = new HashSet<>(eventIds);
+    List<Map<String, Object>> markets = fetchMarketsByEventIds(eventIds).stream()
+        .map(this::normalizeMarket)
+        .filter(market -> {
+          String eventId = eventId(market);
+          return eventId != null && requestedEventIds.contains(eventId);
+        })
+        .toList();
+
+    for (Map<String, Object> market : markets) {
+      cacheMarket(market, now);
+    }
+    Set<String> enrichedEventIds = new HashSet<>();
+    for (Map<String, Object> market : markets) {
+      String eventId = eventId(market);
+      if (eventId != null) {
+        enrichedEventIds.add(eventId);
+      }
+    }
+    for (String eventId : enrichedEventIds) {
+      cache(eventCache, eventId, now);
+    }
+    return markets;
+  }
+
+  private List<Map<String, Object>> fetchAndCacheMarketsByMarketIds(List<String> marketIds, Instant now) {
+    List<Map<String, Object>> markets = fetchMarketsByMarketIds(marketIds).stream()
+        .map(this::normalizeMarket)
+        .toList();
+    for (Map<String, Object> market : markets) {
+      cacheMarket(market, now);
+    }
+    return markets;
+  }
+
+  private Map<String, Object> matchingMarket(List<Map<String, Object>> markets, String marketId) {
+    if (marketId == null || marketId.isBlank()) {
+      return markets.isEmpty() ? Map.of() : markets.getFirst();
+    }
+    for (Map<String, Object> market : markets) {
+      if (marketId.equals(marketId(market))) {
+        return market;
+      }
+    }
+    return Map.of();
   }
 
   private List<Map<String, Object>> fetchMarketsByEventIds(List<String> eventIds) {
@@ -413,6 +494,24 @@ public class BetDexMarketEnrichmentService {
 
   private void cache(Map<String, Instant> cache, String marketId, Instant now) {
     cache.put(marketId, now.plus(properties.marketCacheTtl()));
+  }
+
+  private void cacheMarket(Map<String, Object> market, Instant now) {
+    String marketId = marketId(market);
+    if (marketId == null) {
+      return;
+    }
+    marketDetailsCache.put(marketId, new LinkedHashMap<>(market));
+    cache(marketCache, marketId, now);
+  }
+
+  private Map<String, Object> cachedMarket(String marketId, Instant now) {
+    if (!isCached(marketCache, marketId, now)) {
+      marketDetailsCache.remove(marketId);
+      return Map.of();
+    }
+    Map<String, Object> market = marketDetailsCache.get(marketId);
+    return market == null ? Map.of() : market;
   }
 
   @PreDestroy

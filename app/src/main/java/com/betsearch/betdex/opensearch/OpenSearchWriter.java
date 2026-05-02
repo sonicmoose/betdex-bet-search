@@ -148,13 +148,24 @@ public class OpenSearchWriter {
     post("/" + dailyIndex(properties.pricesAlias(), price.receivedAt()) + "/_doc", price.source());
   }
 
+  public void indexPrice(PriceUpdate price, Map<String, Object> enrichment) {
+    Map<String, Object> document = new LinkedHashMap<>(price.source());
+    applyTextEnrichment(document, enrichment);
+    post("/" + dailyIndex(properties.pricesAlias(), price.receivedAt()) + "/_doc", document);
+  }
+
   public void upsertMarketPrices(List<PriceUpdate> prices) {
+    upsertMarketPrices(prices, Map.of());
+  }
+
+  public void upsertMarketPrices(List<PriceUpdate> prices, Map<String, Object> enrichment) {
     if (prices.isEmpty() || prices.getFirst().marketId() == null) {
       return;
     }
 
     PriceUpdate first = prices.getFirst();
     Map<String, Object> document = currentPriceDocument(first, prices);
+    applyTextEnrichment(document, enrichment);
     Map<String, Object> payload = Map.of(
         "script", Map.of(
             "lang", "painless",
@@ -171,6 +182,78 @@ public class OpenSearchWriter {
             "params", Map.of("patch", document)),
         "upsert", document);
     post("/" + properties.marketsCurrentIndex() + "/_update/" + urlEncode(first.marketId()), payload);
+  }
+
+  private void applyTextEnrichment(Map<String, Object> document, Map<String, Object> enrichment) {
+    if (enrichment == null || enrichment.isEmpty()) {
+      return;
+    }
+
+    for (String key : List.of(
+        "marketId",
+        "eventId",
+        "eventGroupId",
+        "categoryId",
+        "categoryName",
+        "subCategoryId",
+        "subCategoryName",
+        "name",
+        "eventName",
+        "outcomeNames",
+        "outcomeSearchText")) {
+      Object value = enrichment.get(key);
+      if (value != null) {
+        document.put(key, value);
+      }
+    }
+
+    Object rawValue = document.get("raw");
+    if (rawValue instanceof Map<?, ?> rawMap) {
+      @SuppressWarnings("unchecked")
+      Map<String, Object> raw = (Map<String, Object>) rawMap;
+      for (Map.Entry<String, Object> entry : enrichment.entrySet()) {
+        if (!List.of("marketOutcomes", "outcomes", "selections", "runners").contains(entry.getKey())) {
+          raw.put(entry.getKey(), entry.getValue());
+        }
+      }
+    }
+
+    applyOutcomeNames(document, enrichment);
+  }
+
+  private void applyOutcomeNames(Map<String, Object> document, Map<String, Object> enrichment) {
+    Object namesValue = enrichment.get("outcomeNames");
+    if (!(namesValue instanceof Map<?, ?> names)) {
+      return;
+    }
+    Object latestPrices = document.get("latestPrices");
+    if (latestPrices instanceof List<?> prices) {
+      applyOutcomeNames(prices, names);
+    }
+    Object rawValue = document.get("raw");
+    if (rawValue instanceof Map<?, ?> raw) {
+      Object marketOutcomes = raw.get("marketOutcomes");
+      if (marketOutcomes instanceof List<?> prices) {
+        applyOutcomeNames(prices, names);
+      }
+    }
+  }
+
+  private void applyOutcomeNames(List<?> prices, Map<?, ?> names) {
+    for (Object price : prices) {
+      if (!(price instanceof Map<?, ?> priceMap)) {
+        continue;
+      }
+      Object outcomeId = priceMap.get("outcomeId");
+      Object name = names.get(outcomeId);
+      if (outcomeId == null || name == null) {
+        continue;
+      }
+      @SuppressWarnings("unchecked")
+      Map<String, Object> mutablePrice = (Map<String, Object>) priceMap;
+      mutablePrice.put("name", name);
+      mutablePrice.put("outcomeName", name);
+    }
   }
 
   private Map<String, Object> currentDocument(String id, Instant receivedAt, Map<String, Object> payload) {

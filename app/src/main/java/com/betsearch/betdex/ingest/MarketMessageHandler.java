@@ -12,6 +12,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -88,10 +89,14 @@ public class MarketMessageHandler {
       case "MarketStatusUpdate" -> openSearchWriter.upsertMarketStatus(text(root, "marketId"), receivedAt, payload);
       case "MarketPriceUpdate" -> {
         List<PriceUpdate> prices = flattenPrices(root, receivedAt);
-        for (PriceUpdate price : prices) {
-          openSearchWriter.indexPrice(price);
+        Map<String, Object> enrichment = marketEnrichmentService.enrichmentForPrices(prices);
+        if (enrichment == null) {
+          enrichment = Collections.emptyMap();
         }
-        openSearchWriter.upsertMarketPrices(prices);
+        for (PriceUpdate price : prices) {
+          openSearchWriter.indexPrice(price, enrichment);
+        }
+        openSearchWriter.upsertMarketPrices(prices, enrichment);
         marketEnrichmentService.requestMarketEnrichment(prices);
         timestreamWriter.writePrices(prices);
       }

@@ -11,6 +11,7 @@ import com.betsearch.betdex.timestream.TimestreamWriter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
+import java.util.Map;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -67,7 +68,7 @@ class MarketMessageHandlerTest {
         """);
 
 	    ArgumentCaptor<PriceUpdate> priceCaptor = ArgumentCaptor.forClass(PriceUpdate.class);
-	    verify(openSearchWriter).indexPrice(priceCaptor.capture());
+	    verify(openSearchWriter).indexPrice(priceCaptor.capture(), eq(Map.of()));
 	    PriceUpdate price = priceCaptor.getValue();
 	    org.assertj.core.api.Assertions.assertThat(price.marketId()).isEqualTo("m-1");
 	    org.assertj.core.api.Assertions.assertThat(price.eventId()).isEqualTo("e-1");
@@ -83,7 +84,7 @@ class MarketMessageHandlerTest {
 
     @SuppressWarnings("unchecked")
     ArgumentCaptor<List<PriceUpdate>> listCaptor = ArgumentCaptor.forClass(List.class);
-    verify(openSearchWriter).upsertMarketPrices(listCaptor.capture());
+    verify(openSearchWriter).upsertMarketPrices(listCaptor.capture(), eq(Map.of()));
     org.assertj.core.api.Assertions.assertThat(listCaptor.getValue()).hasSize(1);
 
     @SuppressWarnings("unchecked")
