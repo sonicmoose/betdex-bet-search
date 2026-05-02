@@ -217,6 +217,10 @@ export class BetDexIndexerStack extends Stack {
       }
     });
     domain.grantRead(openSearchDataSource.grantPrincipal);
+    openSearchDataSource.grantPrincipal.addToPrincipalPolicy(new iam.PolicyStatement({
+      actions: ['es:ESHttpPost'],
+      resources: [`${domain.domainArn}/*`]
+    }));
 
     openSearchDataSource.createResolver('SearchMarketsResolver', {
       typeName: 'Query',
@@ -386,6 +390,9 @@ function searchMarketsRequestTemplate(): string {
 function searchMarketsResponseTemplate(): string {
   return `
 #set($body = $util.parseJson($ctx.result.body))
+#if($ctx.result.statusCode < 200 || $ctx.result.statusCode >= 300)
+  $util.error($ctx.result.body, "OpenSearchSearchFailed")
+#end
 #set($hits = $body.hits.hits)
 #set($total = $body.hits.total)
 #if(!$util.isNull($total.value))
