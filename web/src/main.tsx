@@ -16,7 +16,7 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
   minute: '2-digit'
 });
 
-const betdexBaseUrl = 'https://betdex.com';
+const betdexBaseUrl = 'https://www.betdex.com';
 const pageSizes = [10, 20, 50];
 const defaultSportOptions = ['FOOTBALL', 'CRICKET', 'ICEHKY', 'MLB'].map((value) => ({ value, label: value }));
 const defaultLeagueOptions = ['ALGE', 'EFL', 'EPL', 'FIFAWC', 'LALIGA', 'LALIGA2', 'MLB', 'NHL'].map((value) => ({ value, label: value }));
@@ -225,7 +225,7 @@ function OutcomePrices({ market, outcome }: { market: Market; outcome: BestOutco
 }
 
 function PriceLink({ market, price, label }: { market: Market; price: PricePoint; label: string }) {
-  const href = `${betdexBaseUrl}/markets/${encodeURIComponent(market.marketId)}?outcome=${encodeURIComponent(price.outcomeId)}&side=${encodeURIComponent(price.side)}`;
+  const href = betdexMarketUrl(market);
 
   return (
     <a className={`price-button price-button-${price.side.toLowerCase()}`} href={href} target="_blank" rel="noreferrer">
@@ -237,7 +237,7 @@ function PriceLink({ market, price, label }: { market: Market; price: PricePoint
 }
 
 function MarketLink({ market }: { market: Market }) {
-  const href = `${betdexBaseUrl}/markets/${encodeURIComponent(market.marketId)}`;
+  const href = betdexMarketUrl(market);
 
   return (
     <a className="price-button" href={href} target="_blank" rel="noreferrer">
@@ -346,6 +346,23 @@ function uniqueOptions(options: Array<{ value: string; label: string }>) {
 
 function isBetdexId(value: string) {
   return /^[A-Z0-9]+$/.test(value);
+}
+
+function betdexMarketUrl(market: Market) {
+  const sport = routeSegment(market.subCategoryId);
+  const league = routeSegment(market.eventGroupId);
+  const eventId = routeSegment(market.eventId);
+  const marketId = encodeURIComponent(market.marketId);
+
+  if (!sport || !league || !eventId) {
+    return `${betdexBaseUrl}/markets/${marketId}`;
+  }
+
+  return `${betdexBaseUrl}/events/${sport}/${league}/${eventId}?market=${marketId}`;
+}
+
+function routeSegment(value: string) {
+  return value.trim().toLowerCase();
 }
 
 function bestPricesByOutcome(prices: PricePoint[]): BestOutcomePrices[] {
