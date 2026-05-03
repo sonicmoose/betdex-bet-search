@@ -24,6 +24,7 @@ const sportIds = new Set(defaultSportOptions.map((option) => option.value));
 const nonLeagueIds = new Set(['SPORTS', 'FOOTBALL', 'CRICKET', 'ICEHKY']);
 
 function App() {
+  const [textValue, setTextValue] = React.useState('');
   const [filters, setFilters] = React.useState<MarketSearchInput>({
     text: '',
     inPlay: [],
@@ -46,6 +47,14 @@ function App() {
   const totalPages = Math.max(1, Math.ceil(searchResult.total / searchResult.pageSize));
   const firstResult = searchResult.total === 0 ? 0 : (searchResult.page - 1) * searchResult.pageSize + 1;
   const lastResult = Math.min(searchResult.total, searchResult.page * searchResult.pageSize);
+
+  React.useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setFilters((current) => current.text === textValue ? current : { ...current, text: textValue, page: 1 });
+    }, 500);
+
+    return () => window.clearTimeout(timeout);
+  }, [textValue]);
 
   React.useEffect(() => {
     let active = true;
@@ -93,8 +102,8 @@ function App() {
         <label className="search-box">
           <Search size={20} />
           <input
-            value={filters.text}
-            onChange={(event) => updateFilters({ text: event.target.value })}
+            value={textValue}
+            onChange={(event) => setTextValue(event.target.value)}
             placeholder="Search team, player, league, sport, or market"
           />
         </label>
