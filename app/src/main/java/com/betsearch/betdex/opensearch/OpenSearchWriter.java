@@ -3,6 +3,7 @@ package com.betsearch.betdex.opensearch;
 import com.betsearch.betdex.config.OpenSearchProperties;
 import com.betsearch.betdex.ingest.PriceUpdate;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -16,10 +17,13 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -72,19 +76,50 @@ public class OpenSearchWriter {
     post("/" + dailyIndex(properties.rawAlias(), receivedAt) + "/_doc", document);
   }
 
-  public void upsertMarket(String marketId, Instant receivedAt, Map<String, Object> payload) {
-    if (marketId == null) {
-      return;
+  public List<String> openMarketIds(int maxResults) {
+    if (maxResults <= 0 || properties.endpoint() == null || properties.endpoint().isBlank()) {
+      return List.of();
     }
-    upsert(properties.marketsCurrentIndex(), marketId, currentDocument(marketId, receivedAt, payload));
+
+    Map<String, Object> payload = Map.of(
+        "size", maxResults,
+        "_source", List.of("marketId", "raw.marketId"),
+        "query", Map.of("term", Map.of("raw.status.keyword", "Open")));
+
+    String response = postForResponse("/" + properties.marketsCurrentIndex() + "/_search", payload);
+    try {
+      JsonNode hits = objectMapper.readTree(response).path("hits").path("hits");
+      Set<String> marketIds = new LinkedHashSet<>();
+      if (hits.isArray()) {
+        for (JsonNode hit : hits) {
+          String marketId = firstText(hit.path("_source"), "marketId", "raw.marketId");
+          if (marketId != null && !marketId.isBlank()) {
+            marketIds.add(marketId);
+          }
+        }
+      }
+      return new ArrayList<>(marketIds);
+    } catch (JsonProcessingException e) {
+      throw new IllegalStateException("Failed to parse OpenSearch current market search response", e);
+    }
   }
 
-  public void upsertMarketStatus(String marketId, Instant receivedAt, Map<String, Object> payload) {
+  public Map<String, Object> upsertMarket(String marketId, Instant receivedAt, Map<String, Object> payload) {
     if (marketId == null) {
-      return;
+      return Map.of();
+    }
+    Map<String, Object> document = currentDocument(marketId, receivedAt, payload);
+    upsert(properties.marketsCurrentIndex(), marketId, document);
+    return document;
+  }
+
+  public Map<String, Object> upsertMarketStatus(String marketId, Instant receivedAt, Map<String, Object> payload) {
+    if (marketId == null) {
+      return Map.of();
     }
     Map<String, Object> patch = currentDocument(marketId, receivedAt, payload);
     upsert(properties.marketsCurrentIndex(), marketId, patch);
+    return patch;
   }
 
   public void enrichMarket(String marketId, Instant receivedAt, Map<String, Object> enrichment) {
@@ -178,7 +213,9 @@ public class OpenSearchWriter {
                   ctx._source.raw = params.patch.raw;
                 } else if (params.patch.name != null || params.patch.eventName != null || params.outcomeNames != null) {
                   for (entry in params.patch.raw.entrySet()) {
-                    ctx._source.raw[entry.getKey()] = entry.getValue();
+                    if (entry.getKey() != 'status' || ctx._source.raw.status == null) {
+                      ctx._source.raw[entry.getKey()] = entry.getValue();
+                    }
                   }
                   if (params.outcomeNames != null && ctx._source.raw.marketOutcomes != null) {
                     for (price in ctx._source.raw.marketOutcomes) {
@@ -273,7 +310,7 @@ public class OpenSearchWriter {
   private Map<String, Object> currentDocument(String id, Instant receivedAt, Map<String, Object> payload) {
     Map<String, Object> document = new LinkedHashMap<>();
     document.put("id", id);
-    document.put("marketId", payload.get("marketId"));
+    document.put("marketId", firstValue(payload, "marketId", "id"));
     document.put("eventId", payload.get("eventId"));
     document.put("eventGroupId", payload.get("eventGroupId"));
     document.put("categoryId", payload.get("categoryId"));
@@ -284,8 +321,23 @@ public class OpenSearchWriter {
     document.put("outcomeSearchText", payload.get("outcomeSearchText"));
     document.put("enrichmentSearchText", payload.get("enrichmentSearchText"));
     document.put("receivedAt", receivedAt.toString());
-    document.put("raw", canonicalRaw(payload));
+    Map<String, Object> raw = canonicalRaw(payload);
+    if (!raw.containsKey("marketId") && raw.containsKey("id")) {
+      raw.put("marketId", raw.get("id"));
+    }
+    document.put("raw", raw);
+    document.entrySet().removeIf(entry -> entry.getValue() == null);
     return document;
+  }
+
+  private Object firstValue(Map<String, Object> payload, String... keys) {
+    for (String key : keys) {
+      Object value = payload.get(key);
+      if (value != null) {
+        return value;
+      }
+    }
+    return null;
   }
 
   private Map<String, Object> canonicalRaw(Map<String, Object> payload) {
@@ -419,13 +471,18 @@ public class OpenSearchWriter {
     requestWithRetry("POST", path, body);
   }
 
-  private void requestWithRetry(String method, String path, byte[] body) {
+  private String postForResponse(String path, Map<String, Object> document) {
+    byte[] body = json(document);
+    return requestWithRetry("POST", path, body);
+  }
+
+  private String requestWithRetry(String method, String path, byte[] body) {
     RuntimeException last = null;
     for (int attempt = 1; attempt <= 3; attempt++) {
       try {
         HttpResponse<String> response = httpClient.send(signedRequest(method, path, body), HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() >= 200 && response.statusCode() < 300) {
-          return;
+          return response.body();
         }
         last = new IllegalStateException("OpenSearch returned " + response.statusCode() + ": " + response.body());
       } catch (IOException e) {
@@ -437,6 +494,19 @@ public class OpenSearchWriter {
       sleepBackoff(attempt);
     }
     throw last;
+  }
+
+  private String firstText(JsonNode source, String... paths) {
+    for (String path : paths) {
+      JsonNode current = source;
+      for (String segment : path.split("\\.")) {
+        current = current.path(segment);
+      }
+      if (!current.isMissingNode() && !current.isNull() && !current.asText().isBlank()) {
+        return current.asText();
+      }
+    }
+    return null;
   }
 
   private HttpRequest signedRequest(String method, String path, byte[] body) {

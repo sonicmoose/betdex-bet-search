@@ -8,11 +8,15 @@ public record IngestProperties(
     int queueCapacity,
     int workerCount,
     Reconnect reconnect,
-    Stream stream
+    Stream stream,
+    Reconciliation reconciliation
 ) {
   public record Reconnect(Duration initialDelay, Duration maxDelay) {
   }
 
   public record Stream(Duration rotationInterval, Duration dedupeTtl) {
+  }
+
+  public record Reconciliation(boolean startupEnabled, int startupMaxMarkets, int batchSize) {
   }
 }

@@ -267,14 +267,29 @@ function normalizeSource(source: Record<string, unknown>): Record<string, unknow
 
 function normalizeStatus(value: string | undefined): MarketStatus {
   const normalized = value?.toLowerCase();
+  if (normalized === 'initializing') {
+    return 'Initializing';
+  }
   if (normalized === 'open') {
     return 'Open';
+  }
+  if (normalized === 'locked') {
+    return 'Locked';
   }
   if (normalized === 'suspended') {
     return 'Suspended';
   }
+  if (normalized === 'settling') {
+    return 'Settling';
+  }
   if (normalized === 'settled') {
     return 'Settled';
+  }
+  if (normalized === 'voiding') {
+    return 'Voiding';
+  }
+  if (normalized === 'voided') {
+    return 'Voided';
   }
   if (normalized === 'closed') {
     return 'Closed';

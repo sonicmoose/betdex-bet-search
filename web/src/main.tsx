@@ -91,7 +91,10 @@ function App() {
         }
         setSearchResult((current) => ({
           ...current,
-          items: current.items.map((market) => market.marketId === update.marketId ? update.source! : market)
+          items: update.source!.status === 'Open'
+            ? current.items.map((market) => market.marketId === update.marketId ? { ...market, ...update.source! } : market)
+            : current.items.filter((market) => market.marketId !== update.marketId),
+          total: update.source!.status === 'Open' ? current.total : Math.max(0, current.total - 1)
         }));
       },
       (reason) => {
@@ -211,7 +214,6 @@ function MarketRow({ market }: { market: Market }) {
         <div className="market-title-line">
           <h2>{market.eventName}</h2>
           {market.inPlay && <span className="live-pill">Live</span>}
-          <Status status={market.status} />
         </div>
         <p>{market.name} · Sport {market.subCategoryId || 'Unknown'} · League {market.eventGroupId || 'Unknown'}</p>
         <div className="market-meta">
@@ -343,10 +345,6 @@ function Select({ label, value, values, onChange }: { label: string; value: stri
       </select>
     </label>
   );
-}
-
-function Status({ status }: { status: string }) {
-  return <span className={`status status-${status.toLowerCase()}`}>{status}</span>;
 }
 
 function deriveFilterOptions(items: Market[]) {

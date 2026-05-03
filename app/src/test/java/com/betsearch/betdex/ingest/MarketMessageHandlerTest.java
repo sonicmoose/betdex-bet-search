@@ -3,6 +3,7 @@ package com.betsearch.betdex.ingest;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -33,6 +34,9 @@ class MarketMessageHandlerTest {
 
   @Test
   void routesMarketUpdateToCurrentMarketIndex() {
+    when(openSearchWriter.upsertMarket(eq("m-1"), any(), any()))
+        .thenReturn(Map.of("marketId", "m-1", "status", "Open"));
+
     handler.handle("""
         {
           "marketId": "m-1",
@@ -45,6 +49,41 @@ class MarketMessageHandlerTest {
 
     verify(openSearchWriter).indexRaw(any(), eq("MarketUpdate"), eq("m-1"), eq("e-1"), any());
     verify(openSearchWriter).upsertMarket(eq("m-1"), any(), any());
+    verify(marketUpdatePublisher).publishMarketUpdated(eq("m-1"), eq("e-1"), eq("MarketUpdate"), any(), any());
+  }
+
+  @Test
+  void publishesMarketStatusUpdatesSoVisibleRowsCanBeRemoved() {
+    when(openSearchWriter.upsertMarketStatus(eq("m-1"), any(), any()))
+        .thenReturn(Map.of("marketId", "m-1", "status", "Settled"));
+
+    handler.handle("""
+        {
+          "type": "MarketStatusUpdate",
+          "marketId": "m-1",
+          "eventId": "e-1",
+          "status": "Settled"
+        }
+        """);
+
+    verify(openSearchWriter).indexRaw(any(), eq("MarketStatusUpdate"), eq("m-1"), eq("e-1"), any());
+    verify(openSearchWriter).upsertMarketStatus(eq("m-1"), any(), any());
+    verify(marketUpdatePublisher).publishMarketUpdated(eq("m-1"), eq("e-1"), eq("MarketStatusUpdate"), any(), any());
+  }
+
+  @Test
+  void doesNotTreatSubscriptionAcknowledgementAsMarketStatusUpdate() {
+    handler.handle("""
+        {
+          "type": "SubscribeUpdate",
+          "subscriptionType": "MarketStatusUpdate",
+          "subscriptionId": "*"
+        }
+        """);
+
+    verify(openSearchWriter).indexRaw(any(), eq("SubscribeUpdate"), any(), any(), any());
+    verify(openSearchWriter, never()).upsertMarketStatus(any(), any(), any());
+    verify(marketUpdatePublisher, never()).publishMarketUpdated(any(), any(), any(), any(), any());
   }
 
   @Test

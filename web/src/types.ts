@@ -1,4 +1,4 @@
-export type MarketStatus = 'Open' | 'Suspended' | 'Settled' | 'Closed';
+export type MarketStatus = 'Initializing' | 'Open' | 'Locked' | 'Suspended' | 'Settling' | 'Settled' | 'Voiding' | 'Voided' | 'Closed';
 export type InPlayFilter = 'Yes' | 'No';
 export type MarketSort = 'Relevance' | 'Start time' | 'Liquidity';
 

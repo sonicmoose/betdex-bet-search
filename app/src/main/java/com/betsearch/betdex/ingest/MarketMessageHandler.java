@@ -56,15 +56,16 @@ public class MarketMessageHandler {
     try {
       JsonNode root = objectMapper.readTree(rawJson);
       JsonNode message = messageNode(root);
-      Map<String, Object> payload = objectMapper.convertValue(root, MAP_TYPE);
+      Map<String, Object> rawPayload = objectMapper.convertValue(root, MAP_TYPE);
+      Map<String, Object> messagePayload = objectMapper.convertValue(message, MAP_TYPE);
       String messageType = detectMessageType(root, message);
       String marketId = firstText(root, message, "marketId", "id");
       String eventId = firstText(root, message, "eventId");
 
       log.info("Message received: {}", rawJson);
 
-      openSearchWriter.indexRaw(receivedAt, messageType, marketId, eventId, payload);
-      routeProjection(message, payload, messageType, receivedAt);
+      openSearchWriter.indexRaw(receivedAt, messageType, marketId, eventId, rawPayload);
+      routeProjection(message, messagePayload, messageType, receivedAt);
       indexedCounter.increment();
     } catch (JsonProcessingException e) {
       log.warn("Malformed BetDEX stream message; indexing raw text only", e);
@@ -89,8 +90,16 @@ public class MarketMessageHandler {
   private void routeProjection(JsonNode root, Map<String, Object> payload, String messageType, Instant receivedAt) {
     switch (messageType) {
       case "EventUpdate" -> openSearchWriter.upsertEvent(text(root, "eventId"), receivedAt, payload);
-      case "MarketUpdate" -> openSearchWriter.upsertMarket(text(root, "marketId"), receivedAt, payload);
-      case "MarketStatusUpdate" -> openSearchWriter.upsertMarketStatus(text(root, "marketId"), receivedAt, payload);
+      case "MarketUpdate" -> {
+        String marketId = firstText(root, root, "marketId", "id");
+        Map<String, Object> currentMarket = openSearchWriter.upsertMarket(marketId, receivedAt, payload);
+        publishMarketUpdate(marketId, text(root, "eventId"), messageType, receivedAt, currentMarket);
+      }
+      case "MarketStatusUpdate" -> {
+        String marketId = firstText(root, root, "marketId", "id");
+        Map<String, Object> currentMarket = openSearchWriter.upsertMarketStatus(marketId, receivedAt, payload);
+        publishMarketUpdate(marketId, text(root, "eventId"), messageType, receivedAt, currentMarket);
+      }
       case "MarketPriceUpdate" -> {
         List<PriceUpdate> prices = flattenPrices(root, receivedAt);
         Map<String, Object> enrichment = marketEnrichmentService.enrichmentForPrices(prices);
@@ -101,19 +110,23 @@ public class MarketMessageHandler {
           openSearchWriter.indexPrice(price, enrichment);
         }
         Map<String, Object> currentMarket = openSearchWriter.upsertMarketPrices(prices, enrichment);
-        if (!currentMarket.isEmpty()) {
-          marketUpdatePublisher.publishMarketUpdated(
-              text(root, "marketId"),
-              text(root, "eventId"),
-              text(root, "updateType"),
-              receivedAt,
-              currentMarket);
-        }
+        publishMarketUpdate(text(root, "marketId"), text(root, "eventId"), text(root, "updateType"), receivedAt, currentMarket);
         marketEnrichmentService.requestMarketEnrichment(prices);
         timestreamWriter.writePrices(prices);
       }
       default -> {
       }
+    }
+  }
+
+  private void publishMarketUpdate(
+      String marketId,
+      String eventId,
+      String updateType,
+      Instant receivedAt,
+      Map<String, Object> currentMarket) {
+    if (currentMarket != null && !currentMarket.isEmpty()) {
+      marketUpdatePublisher.publishMarketUpdated(marketId, eventId, updateType, receivedAt, currentMarket);
     }
   }
 
@@ -171,9 +184,16 @@ public class MarketMessageHandler {
   }
 
   private String detectMessageType(JsonNode root, JsonNode message) {
-    String explicit = firstText(root, message, "messageType", "subscriptionType", "type");
+    String explicit = firstText(root, message, "messageType", "type");
+    if (explicit != null && List.of("AuthenticationUpdate", "SubscribeUpdate", "SubscribeNotAuthenticatedUpdate").contains(explicit)) {
+      return explicit;
+    }
     if (explicit != null && explicit.endsWith("Update")) {
       return explicit;
+    }
+    String subscriptionType = firstText(root, message, "subscriptionType");
+    if (subscriptionType != null && subscriptionType.endsWith("Update") && message.has("marketId")) {
+      return subscriptionType;
     }
     if (message.has("prices")) {
       return "MarketPriceUpdate";

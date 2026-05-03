@@ -125,6 +125,26 @@ public class BetDexMarketEnrichmentService {
     return Map.of();
   }
 
+  public int refreshMarketsByMarketIds(List<String> marketIds) {
+    if (marketIds.isEmpty()) {
+      return 0;
+    }
+
+    Instant now = Instant.now();
+    List<Map<String, Object>> markets = fetchAndCacheMarketsByMarketIds(marketIds, now);
+    int refreshed = 0;
+    for (Map<String, Object> market : markets) {
+      String marketId = marketId(market);
+      if (marketId == null) {
+        continue;
+      }
+      openSearchWriter.enrichMarket(marketId, now, market);
+      refreshed++;
+    }
+    log.info("Refreshed {} BetDEX markets from REST API requested={}", refreshed, marketIds.size());
+    return refreshed;
+  }
+
   private boolean isCached(Map<String, Instant> cache, String marketId, Instant now) {
     Instant expiresAt = cache.get(marketId);
     if (expiresAt == null) {
@@ -315,7 +335,7 @@ public class BetDexMarketEnrichmentService {
   }
 
   private List<Map<String, Object>> fetchMarketsByMarketIds(List<String> marketIds) {
-    List<Map<String, Object>> markets = fetchMarkets(properties.marketsIdsParam(), marketIds, 1, Math.max(1, properties.marketsPageSize()));
+    List<Map<String, Object>> markets = fetchMarkets(properties.marketsIdsParam(), marketIds, properties.marketsFirstPage(), Math.max(1, properties.marketsPageSize()));
     log.info("Fetched {} BetDEX markets from REST API by {} requested={}", markets.size(), properties.marketsIdsParam(), marketIds.size());
     return markets;
   }

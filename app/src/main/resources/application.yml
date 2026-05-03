@@ -43,6 +43,10 @@ ingest:
   stream:
     rotation-interval: ${INGEST_STREAM_ROTATION_INTERVAL:115m}
     dedupe-ttl: ${INGEST_STREAM_DEDUPE_TTL:10m}
+  reconciliation:
+    startup-enabled: ${INGEST_RECONCILIATION_STARTUP_ENABLED:true}
+    startup-max-markets: ${INGEST_RECONCILIATION_STARTUP_MAX_MARKETS:1000}
+    batch-size: ${INGEST_RECONCILIATION_BATCH_SIZE:50}
 
 management:
   endpoints:

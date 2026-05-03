@@ -350,7 +350,6 @@ select {
   font-size: 11px;
 }
 
-.status,
 .live-pill {
   border-radius: 999px;
   display: inline-flex;
@@ -358,22 +357,6 @@ select {
   font-size: 11px;
   font-weight: 800;
   padding: 4px 7px;
-}
-
-.status-open {
-  background: #dff8ed;
-  color: #087245;
-}
-
-.status-suspended {
-  background: #fff1c7;
-  color: #946200;
-}
-
-.status-settled,
-.status-closed {
-  background: #e4e8ee;
-  color: #475569;
 }
 
 .live-pill {
