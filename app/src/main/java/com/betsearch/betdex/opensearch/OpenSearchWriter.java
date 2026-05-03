@@ -107,10 +107,10 @@ public class OpenSearchWriter {
                 for (entry in params.patch.raw.entrySet()) {
                   ctx._source.raw[entry.getKey()] = entry.getValue();
                 }
-                if (params.patch.outcomeNames != null) {
+                if (params.outcomeNames != null) {
                   if (ctx._source.latestPrices != null) {
                     for (price in ctx._source.latestPrices) {
-                      def name = params.patch.outcomeNames[price.outcomeId];
+                      def name = params.outcomeNames[price.outcomeId];
                       if (name != null) {
                         price.name = name;
                         price.outcomeName = name;
@@ -119,7 +119,7 @@ public class OpenSearchWriter {
                   }
                   if (ctx._source.raw.marketOutcomes != null) {
                     for (price in ctx._source.raw.marketOutcomes) {
-                      def name = params.patch.outcomeNames[price.outcomeId];
+                      def name = params.outcomeNames[price.outcomeId];
                       if (name != null) {
                         price.name = name;
                         price.outcomeName = name;
@@ -128,7 +128,7 @@ public class OpenSearchWriter {
                   }
                 }
                 """,
-            "params", Map.of("patch", document)),
+            "params", scriptParams(document, enrichment)),
         "upsert", document);
     post("/" + properties.marketsCurrentIndex() + "/_update/" + urlEncode(marketId), payload);
   }
@@ -175,13 +175,13 @@ public class OpenSearchWriter {
                 }
                 if (ctx._source.raw == null) {
                   ctx._source.raw = params.patch.raw;
-                } else if (params.patch.name != null || params.patch.eventName != null || params.patch.outcomeNames != null) {
+                } else if (params.patch.name != null || params.patch.eventName != null || params.outcomeNames != null) {
                   for (entry in params.patch.raw.entrySet()) {
                     ctx._source.raw[entry.getKey()] = entry.getValue();
                   }
-                  if (params.patch.outcomeNames != null && ctx._source.raw.marketOutcomes != null) {
+                  if (params.outcomeNames != null && ctx._source.raw.marketOutcomes != null) {
                     for (price in ctx._source.raw.marketOutcomes) {
-                      def name = params.patch.outcomeNames[price.outcomeId];
+                      def name = params.outcomeNames[price.outcomeId];
                       if (name != null) {
                         price.name = name;
                         price.outcomeName = name;
@@ -190,7 +190,7 @@ public class OpenSearchWriter {
                   }
                 }
                 """,
-            "params", Map.of("patch", document)),
+            "params", scriptParams(document, enrichment)),
         "upsert", document);
     post("/" + properties.marketsCurrentIndex() + "/_update/" + urlEncode(first.marketId()), payload);
   }
@@ -210,7 +210,7 @@ public class OpenSearchWriter {
         "subCategoryName",
         "name",
         "eventName",
-        "outcomeNames",
+        "outcomeNameItems",
         "outcomeSearchText",
         "enrichmentSearchText")) {
       Object value = enrichment.get(key);
@@ -226,6 +226,10 @@ public class OpenSearchWriter {
       canonicalRaw(enrichment).forEach(raw::put);
     }
 
+    Object outcomeNames = enrichment.get("outcomeNames");
+    if (outcomeNames != null) {
+      document.put("outcomeNameItems", outcomeNameItems(outcomeNames));
+    }
     applyOutcomeNames(document, enrichment);
   }
 
@@ -274,7 +278,7 @@ public class OpenSearchWriter {
     document.put("subCategoryId", payload.get("subCategoryId"));
     document.put("name", payload.get("name"));
     document.put("eventName", payload.get("eventName"));
-    document.put("outcomeNames", payload.get("outcomeNames"));
+    document.put("outcomeNameItems", outcomeNameItems(payload.get("outcomeNames")));
     document.put("outcomeSearchText", payload.get("outcomeSearchText"));
     document.put("enrichmentSearchText", payload.get("enrichmentSearchText"));
     document.put("receivedAt", receivedAt.toString());
@@ -303,7 +307,7 @@ public class OpenSearchWriter {
         "matched",
         "totalMatched",
         "liquidity",
-        "outcomeNames",
+        "outcomeNameItems",
         "outcomeSearchText",
         "enrichmentSearchText",
         "latestPriceUpdateType")) {
@@ -313,6 +317,30 @@ public class OpenSearchWriter {
       }
     }
     return raw;
+  }
+
+  private Map<String, Object> scriptParams(Map<String, Object> patch, Map<String, Object> enrichment) {
+    Map<String, Object> params = new LinkedHashMap<>();
+    params.put("patch", patch);
+    Object outcomeNames = enrichment == null ? null : enrichment.get("outcomeNames");
+    if (outcomeNames != null) {
+      params.put("outcomeNames", outcomeNames);
+    }
+    return params;
+  }
+
+  private List<Map<String, Object>> outcomeNameItems(Object outcomeNames) {
+    if (!(outcomeNames instanceof Map<?, ?> names)) {
+      return List.of();
+    }
+    return names.entrySet().stream()
+        .map(entry -> {
+          Map<String, Object> item = new LinkedHashMap<>();
+          item.put("outcomeId", entry.getKey());
+          item.put("name", entry.getValue());
+          return item;
+        })
+        .toList();
   }
 
   private Map<String, Object> currentPriceDocument(PriceUpdate first, List<PriceUpdate> prices) {

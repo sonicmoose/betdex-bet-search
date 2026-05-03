@@ -96,7 +96,7 @@ function toMarket(hitId: string, raw: Record<string, unknown>): Market {
   const marketOutcomes = array(source, 'marketOutcomes');
   const latestPrices = array(source, 'latestPrices');
   const pricedMarketOutcomes = marketOutcomes.filter(hasPrice);
-  const outcomeNameLookup = stringMap(source, 'outcomeNames');
+  const outcomeNameLookup = outcomeNames(source);
   const outcomes = (pricedMarketOutcomes.length > 0 ? pricedMarketOutcomes : latestPrices)
     .map((price, index) => toPricePoint(price, index, outcomeNameLookup));
   const liquidity = number(source, 'liquidity') ?? sum(outcomes.map((outcome) => outcome.liquidity));
@@ -215,6 +215,18 @@ function stringMap(source: Record<string, unknown>, key: string): Map<string, st
   }
   return new Map(Object.entries(value)
     .filter((entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1].length > 0));
+}
+
+function outcomeNames(source: Record<string, unknown>): Map<string, string> {
+  const byId = stringMap(source, 'outcomeNames');
+  for (const item of array(source, 'outcomeNameItems')) {
+    const outcomeId = text(item, 'outcomeId');
+    const name = text(item, 'name');
+    if (outcomeId && name) {
+      byId.set(outcomeId, name);
+    }
+  }
+  return byId;
 }
 
 function hasPrice(source: Record<string, unknown>): boolean {
