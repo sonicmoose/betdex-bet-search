@@ -324,7 +324,7 @@ public class BetDexMarketEnrichmentService {
     String response = webClient.get()
         .uri(uriBuilder -> uriBuilder
             .path(properties.marketsPath())
-            .queryParam(idsParam, String.join(",", ids))
+            .queryParam(idsParam, ids.toArray())
             .queryParam(properties.marketsPageParam(), page)
             .queryParam(properties.marketsPageSizeParam(), pageSize)
             .build())
@@ -361,6 +361,10 @@ public class BetDexMarketEnrichmentService {
     if (!node.isObject()) {
       return List.of();
     }
+    JsonNode marketsNode = node.get("markets");
+    if (marketsNode != null && marketsNode.isArray()) {
+      return enrichPagedMarkets(node, marketsNode);
+    }
     for (String field : List.of("markets", "items", "results", "data")) {
       JsonNode child = node.get(field);
       if (child != null) {
@@ -382,6 +386,67 @@ public class BetDexMarketEnrichmentService {
     List<Map<String, Object>> nested = new ArrayList<>();
     node.fields().forEachRemaining(entry -> nested.addAll(marketList(entry.getValue())));
     return nested;
+  }
+
+  private List<Map<String, Object>> enrichPagedMarkets(JsonNode root, JsonNode marketsNode) {
+    Map<String, Map<String, Object>> events = mapsById(root.get("events"));
+    Map<String, Map<String, Object>> eventGroups = mapsById(root.get("eventGroups"));
+    Map<String, Map<String, Object>> subcategories = mapsById(root.get("subcategories"));
+    Map<String, Map<String, Object>> categories = mapsById(root.get("categories"));
+    Map<String, Map<String, Object>> marketOutcomes = mapsById(root.get("marketOutcomes"));
+
+    List<Map<String, Object>> markets = arrayToMaps(marketsNode);
+    for (Map<String, Object> market : markets) {
+      String eventId = firstReferenceId(market.get("event"));
+      Map<String, Object> event = eventId == null ? Map.of() : events.getOrDefault(eventId, Map.of());
+      String eventGroupId = firstReferenceId(event.get("eventGroup"));
+      Map<String, Object> eventGroup = eventGroupId == null ? Map.of() : eventGroups.getOrDefault(eventGroupId, Map.of());
+      String subcategoryId = firstReferenceId(eventGroup.get("subcategory"));
+      Map<String, Object> subcategory = subcategoryId == null ? Map.of() : subcategories.getOrDefault(subcategoryId, Map.of());
+      String categoryId = firstReferenceId(subcategory.get("category"));
+      Map<String, Object> category = categoryId == null ? Map.of() : categories.getOrDefault(categoryId, Map.of());
+
+      putIfPresent(market, "marketId", firstString(market, List.of("id")));
+      putIfPresent(market, "eventId", eventId);
+      putIfPresent(market, "eventName", firstString(event, List.of("name")));
+      putIfPresent(market, "eventGroupId", eventGroupId);
+      putIfPresent(market, "eventGroupName", firstString(eventGroup, List.of("name")));
+      putIfPresent(market, "subCategoryId", subcategoryId);
+      putIfPresent(market, "subCategoryName", firstString(subcategory, List.of("name")));
+      putIfPresent(market, "categoryId", categoryId);
+      putIfPresent(market, "categoryName", firstString(category, List.of("name")));
+
+      List<Map<String, Object>> outcomes = referencedMaps(market.get("marketOutcomes"), marketOutcomes);
+      if (!outcomes.isEmpty()) {
+        market.put("marketOutcomes", outcomes);
+      }
+    }
+    return markets;
+  }
+
+  private Map<String, Map<String, Object>> mapsById(JsonNode node) {
+    Map<String, Map<String, Object>> result = new LinkedHashMap<>();
+    if (node == null || !node.isArray()) {
+      return result;
+    }
+    for (Map<String, Object> item : arrayToMaps(node)) {
+      String id = firstString(item, List.of("id"));
+      if (id != null) {
+        result.put(id, item);
+      }
+    }
+    return result;
+  }
+
+  private List<Map<String, Object>> referencedMaps(Object reference, Map<String, Map<String, Object>> byId) {
+    List<Map<String, Object>> result = new ArrayList<>();
+    for (String id : referenceIds(reference)) {
+      Map<String, Object> item = byId.get(id);
+      if (item != null) {
+        result.add(item);
+      }
+    }
+    return result;
   }
 
   private boolean looksLikeMarket(JsonNode node) {
@@ -420,8 +485,11 @@ public class BetDexMarketEnrichmentService {
     putIfPresent(normalized, "marketId", marketId(market));
     putIfPresent(normalized, "eventId", eventId(market));
     putIfPresent(normalized, "eventGroupId", firstString(market, List.of("eventGroupId", "event_group_id", "leagueId", "league_id")));
+    putIfPresent(normalized, "eventGroupName", firstString(market, List.of("eventGroupName", "event_group_name", "leagueName", "league_name")));
     putIfPresent(normalized, "categoryId", firstString(market, List.of("categoryId", "category_id")));
+    putIfPresent(normalized, "categoryName", firstString(market, List.of("categoryName", "category_name")));
     putIfPresent(normalized, "subCategoryId", firstString(market, List.of("subCategoryId", "sub_category_id", "sportId", "sport_id")));
+    putIfPresent(normalized, "subCategoryName", firstString(market, List.of("subCategoryName", "sub_category_name", "sportName", "sport_name")));
     putIfPresent(normalized, "name", firstString(market, List.of("name", "marketName", "market_name", "displayName", "display_name", "title", "question")));
     putIfPresent(normalized, "eventName", eventName(market));
     putIfPresent(normalized, "enrichmentSearchText", searchText(market));
@@ -539,6 +607,33 @@ public class BetDexMarketEnrichmentService {
       }
     }
     return null;
+  }
+
+  private String firstReferenceId(Object value) {
+    List<String> ids = referenceIds(value);
+    return ids.isEmpty() ? null : ids.getFirst();
+  }
+
+  private List<String> referenceIds(Object value) {
+    if (!(value instanceof Map<?, ?> reference)) {
+      return List.of();
+    }
+    Object ids = reference.get("_ids");
+    if (ids instanceof List<?> list) {
+      return list.stream()
+          .filter(item -> item != null && !item.toString().isBlank())
+          .map(Object::toString)
+          .toList();
+    }
+    Object ref = reference.get("_ref");
+    if (ref != null && !ref.toString().isBlank()) {
+      return List.of(ref.toString());
+    }
+    Object id = reference.get("id");
+    if (id != null && !id.toString().isBlank()) {
+      return List.of(id.toString());
+    }
+    return List.of();
   }
 
   private void cache(Map<String, Instant> cache, String marketId, Instant now) {
