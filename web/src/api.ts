@@ -156,8 +156,6 @@ function toGraphqlSort(sort: MarketSort): string {
   switch (sort) {
     case 'Start time':
       return 'START_TIME';
-    case 'Matched':
-      return 'MATCHED';
     case 'Liquidity':
       return 'LIQUIDITY';
     case 'Relevance':

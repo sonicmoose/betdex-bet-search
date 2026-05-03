@@ -16,7 +16,7 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
   minute: '2-digit'
 });
 
-const betdexBaseUrl = 'https://www.betdex.com';
+const betdexBaseUrl = 'https://dev.betdex.com';
 const pageSizes = [10, 20, 50];
 const defaultSportOptions = ['FOOTBALL', 'CRICKET', 'ICEHKY', 'MLB'].map((value) => ({ value, label: value }));
 const defaultLeagueOptions = ['ALGE', 'EFL', 'EPL', 'FIFAWC', 'LALIGA', 'LALIGA2', 'MLB', 'NHL'].map((value) => ({ value, label: value }));
@@ -132,7 +132,7 @@ function App() {
         <Select
           label="Order by"
           value={filters.sort}
-          values={['Relevance', 'Start time', 'Matched', 'Liquidity']}
+          values={['Relevance', 'Start time', 'Liquidity']}
           onChange={(sort) => updateFilters({ sort: sort as MarketSort })}
         />
       </section>
@@ -165,7 +165,6 @@ function App() {
         <section className="market-results" aria-label="Market results">
           <div className="results-head">
             <span>Event / Market</span>
-            <span>Matched</span>
             <span>Prices</span>
           </div>
 
@@ -219,10 +218,6 @@ function MarketRow({ market }: { market: Market }) {
           <span>{Number.isNaN(startsAt.getTime()) ? 'Time TBC' : dateFormatter.format(startsAt)}</span>
           <span>Liquidity ${numberFormatter.format(market.liquidity)}</span>
         </div>
-      </div>
-
-      <div className="matched-cell">
-        <strong>${numberFormatter.format(market.matched)}</strong>
       </div>
 
       <div className="price-strip" aria-label={`${market.eventName} prices`}>

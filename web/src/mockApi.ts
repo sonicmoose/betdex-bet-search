@@ -65,8 +65,6 @@ export async function searchMarkets(input: MarketSearchInput): Promise<MarketSea
     switch (input.sort) {
       case 'Start time':
         return new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime();
-      case 'Matched':
-        return right.matched - left.matched;
       case 'Liquidity':
         return right.liquidity - left.liquidity;
       case 'Relevance':

@@ -213,7 +213,7 @@ select {
   display: grid;
   font-size: 12px;
   font-weight: 800;
-  grid-template-columns: minmax(260px, 0.9fr) 96px minmax(600px, 1.5fr);
+  grid-template-columns: minmax(260px, 0.9fr) minmax(600px, 1.5fr);
   padding: 10px 12px;
   text-transform: uppercase;
 }
@@ -228,7 +228,7 @@ select {
   border-bottom: 1px solid #e5eaf0;
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(260px, 0.9fr) 96px minmax(600px, 1.5fr);
+  grid-template-columns: minmax(260px, 0.9fr) minmax(600px, 1.5fr);
   padding: 12px;
 }
 
@@ -268,13 +268,6 @@ select {
   font-size: 12px;
   gap: 10px;
   margin-top: 8px;
-}
-
-.matched-cell {
-  align-items: center;
-  color: #0f172a;
-  display: flex;
-  font-size: 14px;
 }
 
 .price-strip {
@@ -443,8 +436,7 @@ select {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .results-head span:nth-child(2),
-  .results-head span:nth-child(3) {
+  .results-head span:nth-child(2) {
     display: none;
   }
 

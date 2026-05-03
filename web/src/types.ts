@@ -1,6 +1,6 @@
 export type MarketStatus = 'Open' | 'Suspended' | 'Settled' | 'Closed';
 export type InPlayFilter = 'Yes' | 'No';
-export type MarketSort = 'Relevance' | 'Start time' | 'Matched' | 'Liquidity';
+export type MarketSort = 'Relevance' | 'Start time' | 'Liquidity';
 
 export interface MarketSearchInput {
   text: string;
