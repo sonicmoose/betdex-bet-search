@@ -105,9 +105,7 @@ public class OpenSearchWriter {
                   ctx._source.raw = [:];
                 }
                 for (entry in params.patch.raw.entrySet()) {
-                  if (entry.getKey() != 'marketOutcomes' && entry.getKey() != 'outcomes' && entry.getKey() != 'selections') {
-                    ctx._source.raw[entry.getKey()] = entry.getValue();
-                  }
+                  ctx._source.raw[entry.getKey()] = entry.getValue();
                 }
                 if (params.patch.outcomeNames != null) {
                   if (ctx._source.latestPrices != null) {
@@ -179,9 +177,7 @@ public class OpenSearchWriter {
                   ctx._source.raw = params.patch.raw;
                 } else if (params.patch.name != null || params.patch.eventName != null || params.patch.outcomeNames != null) {
                   for (entry in params.patch.raw.entrySet()) {
-                    if (entry.getKey() != 'marketOutcomes' && entry.getKey() != 'outcomes' && entry.getKey() != 'selections' && entry.getKey() != 'runners') {
-                      ctx._source.raw[entry.getKey()] = entry.getValue();
-                    }
+                    ctx._source.raw[entry.getKey()] = entry.getValue();
                   }
                   if (params.patch.outcomeNames != null && ctx._source.raw.marketOutcomes != null) {
                     for (price in ctx._source.raw.marketOutcomes) {
@@ -227,11 +223,7 @@ public class OpenSearchWriter {
     if (rawValue instanceof Map<?, ?> rawMap) {
       @SuppressWarnings("unchecked")
       Map<String, Object> raw = (Map<String, Object>) rawMap;
-      for (Map.Entry<String, Object> entry : enrichment.entrySet()) {
-        if (!List.of("marketOutcomes", "outcomes", "selections", "runners").contains(entry.getKey())) {
-          raw.put(entry.getKey(), entry.getValue());
-        }
-      }
+      canonicalRaw(enrichment).forEach(raw::put);
     }
 
     applyOutcomeNames(document, enrichment);
@@ -286,8 +278,41 @@ public class OpenSearchWriter {
     document.put("outcomeSearchText", payload.get("outcomeSearchText"));
     document.put("enrichmentSearchText", payload.get("enrichmentSearchText"));
     document.put("receivedAt", receivedAt.toString());
-    document.put("raw", payload);
+    document.put("raw", canonicalRaw(payload));
     return document;
+  }
+
+  private Map<String, Object> canonicalRaw(Map<String, Object> payload) {
+    Map<String, Object> raw = new LinkedHashMap<>();
+    for (String key : List.of(
+        "id",
+        "marketId",
+        "eventId",
+        "eventGroupId",
+        "eventGroupName",
+        "categoryId",
+        "categoryName",
+        "subCategoryId",
+        "subCategoryName",
+        "name",
+        "eventName",
+        "status",
+        "inPlayStatus",
+        "lockAt",
+        "expectedStartTime",
+        "matched",
+        "totalMatched",
+        "liquidity",
+        "outcomeNames",
+        "outcomeSearchText",
+        "enrichmentSearchText",
+        "latestPriceUpdateType")) {
+      Object value = payload.get(key);
+      if (value != null) {
+        raw.put(key, value);
+      }
+    }
+    return raw;
   }
 
   private Map<String, Object> currentPriceDocument(PriceUpdate first, List<PriceUpdate> prices) {
