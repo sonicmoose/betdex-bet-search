@@ -81,27 +81,37 @@ public class OpenSearchWriter {
       return List.of();
     }
 
-    Map<String, Object> payload = Map.of(
-        "size", maxResults,
-        "_source", List.of("marketId", "raw.marketId"),
-        "query", Map.of("term", Map.of("raw.status.keyword", "Open")));
+    int pageSize = Math.min(500, maxResults);
+    Set<String> marketIds = new LinkedHashSet<>();
+    for (int from = 0; from < maxResults; from += pageSize) {
+      Map<String, Object> payload = Map.of(
+          "from", from,
+          "size", Math.min(pageSize, maxResults - from),
+          "_source", List.of("marketId", "raw.marketId"),
+          "sort", List.of(Map.of("_id", Map.of("order", "asc"))),
+          "query", Map.of("term", Map.of("raw.status.keyword", "Open")));
 
-    String response = postForResponse("/" + properties.marketsCurrentIndex() + "/_search", payload);
-    try {
-      JsonNode hits = objectMapper.readTree(response).path("hits").path("hits");
-      Set<String> marketIds = new LinkedHashSet<>();
-      if (hits.isArray()) {
+      String response = postForResponse("/" + properties.marketsCurrentIndex() + "/_search", payload);
+      try {
+        JsonNode hits = objectMapper.readTree(response).path("hits").path("hits");
+        if (!hits.isArray() || hits.isEmpty()) {
+          break;
+        }
         for (JsonNode hit : hits) {
           String marketId = firstText(hit.path("_source"), "marketId", "raw.marketId");
           if (marketId != null && !marketId.isBlank()) {
             marketIds.add(marketId);
           }
         }
+      } catch (JsonProcessingException e) {
+        throw new IllegalStateException("Failed to parse OpenSearch current market search response", e);
       }
-      return new ArrayList<>(marketIds);
-    } catch (JsonProcessingException e) {
-      throw new IllegalStateException("Failed to parse OpenSearch current market search response", e);
+
+      if (marketIds.size() >= maxResults) {
+        break;
+      }
     }
+    return new ArrayList<>(marketIds);
   }
 
   public Map<String, Object> upsertMarket(String marketId, Instant receivedAt, Map<String, Object> payload) {

@@ -17,6 +17,11 @@ public record IngestProperties(
   public record Stream(Duration rotationInterval, Duration dedupeTtl) {
   }
 
-  public record Reconciliation(boolean startupEnabled, int startupMaxMarkets, int batchSize) {
+  public record Reconciliation(
+      boolean enabled,
+      Duration initialDelay,
+      Duration interval,
+      int maxMarkets,
+      int batchSize) {
   }
 }
