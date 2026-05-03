@@ -6,6 +6,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -360,6 +361,7 @@ public class OpenSearchWriter {
     raw.put("eventName", first.eventId() == null ? first.marketId() : first.eventId());
     raw.put("status", "Open");
     raw.put("inPlayStatus", "NotApplicable");
+    raw.put("liquidity", totalLiquidity(prices));
     raw.put("marketOutcomes", latestPrices);
     raw.put("latestPriceUpdateType", first.updateType());
 
@@ -371,10 +373,18 @@ public class OpenSearchWriter {
     document.put("categoryId", first.categoryId());
     document.put("subCategoryId", first.subCategoryId());
     document.put("receivedAt", first.receivedAt().toString());
+    document.put("liquidity", totalLiquidity(prices));
     document.put("latestPrices", latestPrices);
     document.put("latestPriceUpdateType", first.updateType());
     document.put("raw", raw);
     return document;
+  }
+
+  private BigDecimal totalLiquidity(List<PriceUpdate> prices) {
+    return prices.stream()
+        .map(PriceUpdate::liquidity)
+        .filter(value -> value != null)
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
   }
 
   private Map<String, Object> latestPriceDocument(PriceUpdate price) {

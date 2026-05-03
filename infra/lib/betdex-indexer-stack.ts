@@ -367,11 +367,11 @@ function searchMarketsRequestTemplate(): string {
   $util.qr($filter.add({"range":{"raw.lockAt":$range}}))
 #end
 #if($input.sort == "START_TIME")
-  $util.qr($sort.add({"raw.lockAt":"asc"}))
+  $util.qr($sort.add({"raw.lockAt":{"order":"asc","unmapped_type":"date","missing":"_last"}}))
 #elseif($input.sort == "MATCHED")
-  $util.qr($sort.add({"raw.matched":"desc"}))
+  $util.qr($sort.add({"matched":{"order":"desc","unmapped_type":"double","missing":"_last"}}))
 #elseif($input.sort == "LIQUIDITY")
-  $util.qr($sort.add({"raw.liquidity":"desc"}))
+  $util.qr($sort.add({"liquidity":{"order":"desc","unmapped_type":"double","missing":"_last"}}))
 #end
 #if($hasQuery)
   #set($query = {"bool": { "must": $must, "filter": $filter }})
