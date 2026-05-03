@@ -125,6 +125,18 @@ public class BetDexMarketEnrichmentService {
     return Map.of();
   }
 
+  public Map<String, Object> cachedEnrichmentForPrices(List<PriceUpdate> prices) {
+    if (prices.isEmpty()) {
+      return Map.of();
+    }
+
+    String marketId = prices.getFirst().marketId();
+    if (marketId == null || marketId.isBlank()) {
+      return Map.of();
+    }
+    return cachedMarket(marketId, Instant.now());
+  }
+
   public int refreshMarketsByMarketIds(List<String> marketIds) {
     if (marketIds.isEmpty()) {
       return 0;

@@ -7,6 +7,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record IngestProperties(
     int queueCapacity,
     int workerCount,
+    boolean rawIndexEnabled,
+    boolean priceHistoryEnabled,
+    boolean messageLoggingEnabled,
     Reconnect reconnect,
     Stream stream,
     Reconciliation reconciliation

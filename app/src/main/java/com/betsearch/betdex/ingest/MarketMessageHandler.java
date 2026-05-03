@@ -2,6 +2,7 @@ package com.betsearch.betdex.ingest;
 
 import com.betsearch.betdex.appsync.AppSyncMarketUpdatePublisher;
 import com.betsearch.betdex.betdex.BetDexMarketEnrichmentService;
+import com.betsearch.betdex.config.IngestProperties;
 import com.betsearch.betdex.opensearch.OpenSearchWriter;
 import com.betsearch.betdex.timestream.TimestreamWriter;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -32,6 +33,7 @@ public class MarketMessageHandler {
   private final TimestreamWriter timestreamWriter;
   private final BetDexMarketEnrichmentService marketEnrichmentService;
   private final AppSyncMarketUpdatePublisher marketUpdatePublisher;
+  private final IngestProperties ingestProperties;
   private final Counter indexedCounter;
   private final Counter failureCounter;
 
@@ -41,12 +43,14 @@ public class MarketMessageHandler {
       TimestreamWriter timestreamWriter,
       BetDexMarketEnrichmentService marketEnrichmentService,
       AppSyncMarketUpdatePublisher marketUpdatePublisher,
+      IngestProperties ingestProperties,
       MeterRegistry meterRegistry) {
     this.objectMapper = objectMapper;
     this.openSearchWriter = openSearchWriter;
     this.timestreamWriter = timestreamWriter;
     this.marketEnrichmentService = marketEnrichmentService;
     this.marketUpdatePublisher = marketUpdatePublisher;
+    this.ingestProperties = ingestProperties;
     this.indexedCounter = meterRegistry.counter("betdex.messages.indexed");
     this.failureCounter = meterRegistry.counter("betdex.messages.write_failures");
   }
@@ -62,9 +66,15 @@ public class MarketMessageHandler {
       String marketId = firstText(root, message, "marketId", "id");
       String eventId = firstText(root, message, "eventId");
 
-      log.info("Message received: {}", rawJson);
+      if (ingestProperties.messageLoggingEnabled()) {
+        log.info("Message received: {}", rawJson);
+      } else {
+        log.debug("Message received type={} marketId={} eventId={}", messageType, marketId, eventId);
+      }
 
-      openSearchWriter.indexRaw(receivedAt, messageType, marketId, eventId, rawPayload);
+      if (ingestProperties.rawIndexEnabled()) {
+        openSearchWriter.indexRaw(receivedAt, messageType, marketId, eventId, rawPayload);
+      }
       routeProjection(message, messagePayload, messageType, receivedAt);
       indexedCounter.increment();
     } catch (JsonProcessingException e) {
@@ -102,12 +112,14 @@ public class MarketMessageHandler {
       }
       case "MarketPriceUpdate" -> {
         List<PriceUpdate> prices = flattenPrices(root, receivedAt);
-        Map<String, Object> enrichment = marketEnrichmentService.enrichmentForPrices(prices);
+        Map<String, Object> enrichment = marketEnrichmentService.cachedEnrichmentForPrices(prices);
         if (enrichment == null) {
           enrichment = Collections.emptyMap();
         }
-        for (PriceUpdate price : prices) {
-          openSearchWriter.indexPrice(price, enrichment);
+        if (ingestProperties.priceHistoryEnabled()) {
+          for (PriceUpdate price : prices) {
+            openSearchWriter.indexPrice(price, enrichment);
+          }
         }
         Map<String, Object> currentMarket = openSearchWriter.upsertMarketPrices(prices, enrichment);
         publishMarketUpdate(text(root, "marketId"), text(root, "eventId"), text(root, "updateType"), receivedAt, currentMarket);

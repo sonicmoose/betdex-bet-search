@@ -35,8 +35,11 @@ timestream:
   table: ${TIMESTREAM_TABLE:}
 
 ingest:
-  queue-capacity: ${INGEST_QUEUE_CAPACITY:10000}
-  worker-count: ${INGEST_WORKER_COUNT:2}
+  queue-capacity: ${INGEST_QUEUE_CAPACITY:100000}
+  worker-count: ${INGEST_WORKER_COUNT:6}
+  raw-index-enabled: ${INGEST_RAW_INDEX_ENABLED:false}
+  price-history-enabled: ${INGEST_PRICE_HISTORY_ENABLED:false}
+  message-logging-enabled: ${INGEST_MESSAGE_LOGGING_ENABLED:false}
   reconnect:
     initial-delay: ${INGEST_RECONNECT_INITIAL_DELAY:1s}
     max-delay: ${INGEST_RECONNECT_MAX_DELAY:1m}

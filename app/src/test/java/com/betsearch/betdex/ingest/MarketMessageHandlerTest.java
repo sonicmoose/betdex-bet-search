@@ -9,11 +9,13 @@ import static org.mockito.Mockito.when;
 
 import com.betsearch.betdex.appsync.AppSyncMarketUpdatePublisher;
 import com.betsearch.betdex.betdex.BetDexMarketEnrichmentService;
+import com.betsearch.betdex.config.IngestProperties;
 import com.betsearch.betdex.opensearch.OpenSearchWriter;
 import com.betsearch.betdex.timestream.TimestreamWriter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.Map;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -24,12 +26,22 @@ class MarketMessageHandlerTest {
   private final TimestreamWriter timestreamWriter = mock(TimestreamWriter.class);
   private final BetDexMarketEnrichmentService marketEnrichmentService = mock(BetDexMarketEnrichmentService.class);
   private final AppSyncMarketUpdatePublisher marketUpdatePublisher = mock(AppSyncMarketUpdatePublisher.class);
+  private final IngestProperties ingestProperties = new IngestProperties(
+      1000,
+      1,
+      true,
+      true,
+      false,
+      new IngestProperties.Reconnect(Duration.ofSeconds(1), Duration.ofMinutes(1)),
+      new IngestProperties.Stream(Duration.ofMinutes(115), Duration.ofMinutes(10)),
+      new IngestProperties.Reconciliation(true, Duration.ofMinutes(2), Duration.ofMinutes(10), 1000, 50));
   private final MarketMessageHandler handler = new MarketMessageHandler(
       new ObjectMapper(),
       openSearchWriter,
       timestreamWriter,
       marketEnrichmentService,
       marketUpdatePublisher,
+      ingestProperties,
       new SimpleMeterRegistry());
 
   @Test
@@ -88,6 +100,7 @@ class MarketMessageHandlerTest {
 
   @Test
   void flattensMarketPriceUpdateForOpenSearchAndTimestream() {
+	    when(marketEnrichmentService.cachedEnrichmentForPrices(any())).thenReturn(Map.of());
 	    when(openSearchWriter.upsertMarketPrices(any(), eq(Map.of()))).thenReturn(Map.of("marketId", "m-1"));
 	    handler.handle("""
 	        {
