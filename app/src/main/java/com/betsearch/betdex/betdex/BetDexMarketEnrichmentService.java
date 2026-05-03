@@ -519,9 +519,11 @@ public class BetDexMarketEnrichmentService {
       normalized.put("outcomeSearchText", String.join(" ", outcomeNames.values()));
     }
     log.info(
-        "Normalized BetDEX market enrichment marketId={} eventId={} name={} eventName={} outcomeNames={}",
+        "Normalized BetDEX market enrichment marketId={} eventId={} status={} inPlayStatus={} name={} eventName={} outcomeNames={}",
         normalized.get("marketId"),
         normalized.get("eventId"),
+        normalized.get("status"),
+        normalized.get("inPlayStatus"),
         normalized.get("name"),
         normalized.get("eventName"),
         outcomeNames.size());

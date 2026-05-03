@@ -213,7 +213,7 @@ public class OpenSearchWriter {
                   ctx._source.raw = params.patch.raw;
                 } else if (params.patch.name != null || params.patch.eventName != null || params.outcomeNames != null) {
                   for (entry in params.patch.raw.entrySet()) {
-                    if (entry.getKey() != 'status' || ctx._source.raw.status == null) {
+                    if (entry.getKey() != 'status' || ctx._source.raw.status == null || entry.getValue() != 'Open') {
                       ctx._source.raw[entry.getKey()] = entry.getValue();
                     }
                   }
