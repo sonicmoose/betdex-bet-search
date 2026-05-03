@@ -25,6 +25,10 @@ opensearch:
   markets-current-index: betdex-markets-current
   events-current-index: betdex-events-current
 
+appsync:
+  graphql-url: ${APPSYNC_GRAPHQL_URL:}
+  api-key: ${APPSYNC_API_KEY:}
+
 timestream:
   enabled: ${TIMESTREAM_ENABLED:false}
   database: ${TIMESTREAM_DATABASE:}

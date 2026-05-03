@@ -96,6 +96,7 @@ export class BetDexIndexerStack extends Stack {
 
     let timestreamDatabase: timestream.CfnDatabase | undefined;
     let timestreamTable: timestream.CfnTable | undefined;
+    let indexerContainer: ecs.ContainerDefinition | undefined;
     if (enableTimestream) {
       timestreamDatabase = new timestream.CfnDatabase(this, 'TimestreamDatabase', {
         databaseName: 'betdex'
@@ -161,6 +162,7 @@ export class BetDexIndexerStack extends Stack {
         },
         portMappings: [{ containerPort: 8080 }]
       });
+      indexerContainer = container;
 
       const service = new ecs.FargateService(this, 'IndexerService', {
         cluster,
@@ -209,6 +211,8 @@ export class BetDexIndexerStack extends Stack {
         fieldLogLevel: appsync.FieldLogLevel.ERROR
       }
     });
+    indexerContainer?.addEnvironment('APPSYNC_GRAPHQL_URL', api.graphqlUrl);
+    indexerContainer?.addEnvironment('APPSYNC_API_KEY', api.apiKey ?? '');
 
     const openSearchDataSource = api.addHttpDataSource('OpenSearchDataSource', `https://${domain.domainEndpoint}`, {
       authorizationConfig: {

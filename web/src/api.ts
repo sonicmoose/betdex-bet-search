@@ -1,5 +1,5 @@
 import { markets as mockMarkets, searchMarkets as searchMockMarkets } from './mockApi';
-import type { Market, MarketSearchInput, MarketSearchResult, MarketSort, MarketStatus, PricePoint } from './types';
+import type { Market, MarketSearchInput, MarketSearchResult, MarketSort, MarketStatus, MarketUpdate, PricePoint } from './types';
 
 const appsyncUrl = import.meta.env.VITE_APPSYNC_GRAPHQL_URL as string | undefined;
 const appsyncApiKey = import.meta.env.VITE_APPSYNC_API_KEY as string | undefined;
@@ -17,6 +17,18 @@ const searchMarketsQuery = `
         id
         source
       }
+    }
+  }
+`;
+
+const marketUpdatedSubscription = `
+  subscription OnMarketUpdated($marketId: ID) {
+    onMarketUpdated(marketId: $marketId) {
+      marketId
+      eventId
+      updateType
+      receivedAt
+      source
     }
   }
 `;
@@ -59,6 +71,70 @@ export async function searchMarkets(input: MarketSearchInput): Promise<MarketSea
     total: result.total,
     page: input.page,
     pageSize: input.pageSize
+  };
+}
+
+export function subscribeToMarketUpdates(
+  marketIds: string[],
+  onUpdate: (update: MarketUpdate) => void,
+  onError: (reason: Error) => void
+): () => void {
+  const ids = Array.from(new Set(marketIds.filter(Boolean)));
+  if (!isLiveDataSource || ids.length === 0) {
+    return () => {};
+  }
+
+  const socket = new WebSocket(appsyncRealtimeUrl(), 'graphql-ws');
+  let closed = false;
+
+  socket.addEventListener('open', () => {
+    socket.send(JSON.stringify({ type: 'connection_init' }));
+  });
+  socket.addEventListener('message', (event) => {
+    const message = JSON.parse(event.data as string) as AppSyncRealtimeMessage;
+    if (message.type === 'connection_ack') {
+      ids.forEach((marketId) => {
+        socket.send(JSON.stringify({
+          id: marketId,
+          type: 'start',
+          payload: {
+            data: JSON.stringify({
+              query: marketUpdatedSubscription,
+              variables: { marketId }
+            }),
+            extensions: {
+              authorization: appsyncAuthorization()
+            }
+          }
+        }));
+      });
+      return;
+    }
+    if (message.type === 'data') {
+      const update = message.payload?.data?.onMarketUpdated;
+      if (update) {
+        onUpdate(toMarketUpdate(update));
+      }
+      return;
+    }
+    if (message.type === 'error') {
+      onError(new Error(JSON.stringify(message.payload ?? message)));
+    }
+  });
+  socket.addEventListener('error', () => {
+    if (!closed) {
+      onError(new Error('AppSync realtime connection failed'));
+    }
+  });
+
+  return () => {
+    closed = true;
+    ids.forEach((marketId) => {
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ id: marketId, type: 'stop' }));
+      }
+    });
+    socket.close();
   };
 }
 
@@ -123,6 +199,17 @@ function toMarket(hitId: string, raw: Record<string, unknown>): Market {
   };
 }
 
+function toMarketUpdate(raw: RawMarketUpdate): MarketUpdate {
+  const source = raw.source === undefined ? undefined : toMarket(raw.marketId, parseAwsJson(raw.source));
+  return {
+    marketId: raw.marketId,
+    eventId: raw.eventId,
+    updateType: raw.updateType,
+    receivedAt: raw.receivedAt,
+    source
+  };
+}
+
 function toPricePoint(raw: Record<string, unknown>, index: number, outcomeNameLookup: Map<string, string>): PricePoint {
   const outcomeId = text(raw, 'outcomeId') ?? text(raw, 'id') ?? `outcome-${index}`;
   const rawName = text(raw, 'name') ?? text(raw, 'outcomeName');
@@ -144,6 +231,26 @@ function parseAwsJson(value: unknown): Record<string, unknown> {
     return isRecord(parsed) ? parsed : {};
   }
   return isRecord(value) ? value : {};
+}
+
+function appsyncAuthorization() {
+  return {
+    host: new URL(appsyncUrl!).host,
+    'x-api-key': appsyncApiKey!
+  };
+}
+
+function appsyncRealtimeUrl() {
+  const url = new URL(appsyncUrl!);
+  url.protocol = 'wss:';
+  url.hostname = url.hostname.replace('.appsync-api.', '.appsync-realtime-api.');
+  url.searchParams.set('header', base64Url(JSON.stringify(appsyncAuthorization())));
+  url.searchParams.set('payload', base64Url('{}'));
+  return url.toString();
+}
+
+function base64Url(value: string) {
+  return btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 function normalizeSource(source: Record<string, unknown>): Record<string, unknown> {
@@ -254,4 +361,21 @@ interface GraphqlResponse {
   errors?: Array<{
     message: string;
   }>;
+}
+
+interface RawMarketUpdate {
+  marketId: string;
+  eventId?: string;
+  updateType?: string;
+  receivedAt: string;
+  source?: unknown;
+}
+
+interface AppSyncRealtimeMessage {
+  type: string;
+  payload?: {
+    data?: {
+      onMarketUpdated?: RawMarketUpdate;
+    };
+  };
 }

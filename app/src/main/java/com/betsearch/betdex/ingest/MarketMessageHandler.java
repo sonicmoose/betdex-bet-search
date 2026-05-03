@@ -1,5 +1,6 @@
 package com.betsearch.betdex.ingest;
 
+import com.betsearch.betdex.appsync.AppSyncMarketUpdatePublisher;
 import com.betsearch.betdex.betdex.BetDexMarketEnrichmentService;
 import com.betsearch.betdex.opensearch.OpenSearchWriter;
 import com.betsearch.betdex.timestream.TimestreamWriter;
@@ -30,6 +31,7 @@ public class MarketMessageHandler {
   private final OpenSearchWriter openSearchWriter;
   private final TimestreamWriter timestreamWriter;
   private final BetDexMarketEnrichmentService marketEnrichmentService;
+  private final AppSyncMarketUpdatePublisher marketUpdatePublisher;
   private final Counter indexedCounter;
   private final Counter failureCounter;
 
@@ -38,11 +40,13 @@ public class MarketMessageHandler {
       OpenSearchWriter openSearchWriter,
       TimestreamWriter timestreamWriter,
       BetDexMarketEnrichmentService marketEnrichmentService,
+      AppSyncMarketUpdatePublisher marketUpdatePublisher,
       MeterRegistry meterRegistry) {
     this.objectMapper = objectMapper;
     this.openSearchWriter = openSearchWriter;
     this.timestreamWriter = timestreamWriter;
     this.marketEnrichmentService = marketEnrichmentService;
+    this.marketUpdatePublisher = marketUpdatePublisher;
     this.indexedCounter = meterRegistry.counter("betdex.messages.indexed");
     this.failureCounter = meterRegistry.counter("betdex.messages.write_failures");
   }
@@ -96,7 +100,15 @@ public class MarketMessageHandler {
         for (PriceUpdate price : prices) {
           openSearchWriter.indexPrice(price, enrichment);
         }
-        openSearchWriter.upsertMarketPrices(prices, enrichment);
+        Map<String, Object> currentMarket = openSearchWriter.upsertMarketPrices(prices, enrichment);
+        if (!currentMarket.isEmpty()) {
+          marketUpdatePublisher.publishMarketUpdated(
+              text(root, "marketId"),
+              text(root, "eventId"),
+              text(root, "updateType"),
+              receivedAt,
+              currentMarket);
+        }
         marketEnrichmentService.requestMarketEnrichment(prices);
         timestreamWriter.writePrices(prices);
       }

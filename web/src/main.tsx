@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { Search } from 'lucide-react';
-import { dataSourceLabel, initialMarkets, searchMarkets } from './api';
+import { dataSourceLabel, initialMarkets, searchMarkets, subscribeToMarketUpdates } from './api';
 import type { InPlayFilter, Market, MarketSearchInput, MarketSearchResult, MarketSort, PricePoint } from './types';
 import './styles.css';
 
@@ -47,6 +47,11 @@ function App() {
   const totalPages = Math.max(1, Math.ceil(searchResult.total / searchResult.pageSize));
   const firstResult = searchResult.total === 0 ? 0 : (searchResult.page - 1) * searchResult.pageSize + 1;
   const lastResult = Math.min(searchResult.total, searchResult.page * searchResult.pageSize);
+  const visibleMarketIds = React.useMemo(
+    () => searchResult.items.map((market) => market.marketId),
+    [searchResult.items]
+  );
+  const visibleMarketIdsKey = visibleMarketIds.join('|');
 
   React.useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -76,6 +81,23 @@ function App() {
       active = false;
     };
   }, [filters]);
+
+  React.useEffect(() => {
+    return subscribeToMarketUpdates(
+      visibleMarketIds,
+      (update) => {
+        if (!update.source) {
+          return;
+        }
+        setSearchResult((current) => ({
+          ...current,
+          items: current.items.map((market) => market.marketId === update.marketId ? update.source! : market)
+        }));
+      },
+      (reason) => {
+        console.warn(reason);
+      });
+  }, [visibleMarketIdsKey]);
 
   function updateFilters(next: Partial<MarketSearchInput>) {
     setFilters((current) => ({ ...current, ...next, page: 1 }));

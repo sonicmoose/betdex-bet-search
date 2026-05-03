@@ -153,13 +153,13 @@ public class OpenSearchWriter {
     post("/" + dailyIndex(properties.pricesAlias(), price.receivedAt()) + "/_doc", document);
   }
 
-  public void upsertMarketPrices(List<PriceUpdate> prices) {
-    upsertMarketPrices(prices, Map.of());
+  public Map<String, Object> upsertMarketPrices(List<PriceUpdate> prices) {
+    return upsertMarketPrices(prices, Map.of());
   }
 
-  public void upsertMarketPrices(List<PriceUpdate> prices, Map<String, Object> enrichment) {
+  public Map<String, Object> upsertMarketPrices(List<PriceUpdate> prices, Map<String, Object> enrichment) {
     if (prices.isEmpty() || prices.getFirst().marketId() == null) {
-      return;
+      return Map.of();
     }
 
     PriceUpdate first = prices.getFirst();
@@ -194,6 +194,7 @@ public class OpenSearchWriter {
             "params", scriptParams(document, enrichment)),
         "upsert", document);
     post("/" + properties.marketsCurrentIndex() + "/_update/" + urlEncode(first.marketId()), payload);
+    return document;
   }
 
   private void applyTextEnrichment(Map<String, Object> document, Map<String, Object> enrichment) {

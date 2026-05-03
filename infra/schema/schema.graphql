@@ -61,6 +61,7 @@ input MarketUpdatedInput {
   eventId: ID
   updateType: String
   receivedAt: AWSDateTime!
+  source: AWSJSON
 }
 
 type MarketSearchResult {
@@ -103,4 +104,5 @@ type MarketUpdated {
   eventId: ID
   updateType: String
   receivedAt: AWSDateTime!
+  source: AWSJSON
 }

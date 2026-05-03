@@ -4,7 +4,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import com.betsearch.betdex.appsync.AppSyncMarketUpdatePublisher;
 import com.betsearch.betdex.betdex.BetDexMarketEnrichmentService;
 import com.betsearch.betdex.opensearch.OpenSearchWriter;
 import com.betsearch.betdex.timestream.TimestreamWriter;
@@ -20,11 +22,13 @@ class MarketMessageHandlerTest {
   private final OpenSearchWriter openSearchWriter = mock(OpenSearchWriter.class);
   private final TimestreamWriter timestreamWriter = mock(TimestreamWriter.class);
   private final BetDexMarketEnrichmentService marketEnrichmentService = mock(BetDexMarketEnrichmentService.class);
+  private final AppSyncMarketUpdatePublisher marketUpdatePublisher = mock(AppSyncMarketUpdatePublisher.class);
   private final MarketMessageHandler handler = new MarketMessageHandler(
       new ObjectMapper(),
       openSearchWriter,
       timestreamWriter,
       marketEnrichmentService,
+      marketUpdatePublisher,
       new SimpleMeterRegistry());
 
   @Test
@@ -45,6 +49,7 @@ class MarketMessageHandlerTest {
 
   @Test
   void flattensMarketPriceUpdateForOpenSearchAndTimestream() {
+	    when(openSearchWriter.upsertMarketPrices(any(), eq(Map.of()))).thenReturn(Map.of("marketId", "m-1"));
 	    handler.handle("""
 	        {
 	          "updateType": "Snapshot",
@@ -86,6 +91,7 @@ class MarketMessageHandlerTest {
     ArgumentCaptor<List<PriceUpdate>> listCaptor = ArgumentCaptor.forClass(List.class);
     verify(openSearchWriter).upsertMarketPrices(listCaptor.capture(), eq(Map.of()));
     org.assertj.core.api.Assertions.assertThat(listCaptor.getValue()).hasSize(1);
+    verify(marketUpdatePublisher).publishMarketUpdated(eq("m-1"), eq("e-1"), eq("Snapshot"), any(), any());
 
     @SuppressWarnings("unchecked")
     ArgumentCaptor<List<PriceUpdate>> timestreamCaptor = ArgumentCaptor.forClass(List.class);

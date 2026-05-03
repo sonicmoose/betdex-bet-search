@@ -47,3 +47,11 @@ export interface PricePoint {
   change: number;
   validAt: string;
 }
+
+export interface MarketUpdate {
+  marketId: string;
+  eventId?: string;
+  updateType?: string;
+  receivedAt: string;
+  source?: Market;
+}
