@@ -206,7 +206,7 @@ function App() {
 
 function MarketRow({ market }: { market: Market }) {
   const startsAt = new Date(market.startsAt);
-  const bestPrices = bestPricesByOutcome(market.outcomes);
+  const bestPrices = bestPricesByOutcome(market.outcomes, market.marketOutcomes);
 
   return (
     <article className="market-row">
@@ -240,12 +240,12 @@ function OutcomePrices({ market, outcome }: { market: Market; outcome: BestOutco
         {outcome.back ? (
           <PriceLink market={market} price={outcome.back} label="Back" displaySide="back" />
         ) : (
-          <span className="price-button price-button-empty">Back</span>
+          <OfferLink market={market} label="Back" displaySide="back" />
         )}
         {outcome.lay ? (
           <PriceLink market={market} price={outcome.lay} label="Lay" displaySide="lay" />
         ) : (
-          <span className="price-button price-button-empty">Lay</span>
+          <OfferLink market={market} label="Lay" displaySide="lay" />
         )}
       </div>
     </div>
@@ -270,6 +270,18 @@ function PriceLink({
       <span>{label}</span>
       <strong>{price.price.toFixed(2)}</strong>
       <small>${numberFormatter.format(price.liquidity)}</small>
+    </a>
+  );
+}
+
+function OfferLink({ market, label, displaySide }: { market: Market; label: string; displaySide: 'back' | 'lay' }) {
+  const href = betdexMarketUrl(market);
+
+  return (
+    <a className={`price-button price-button-empty price-button-${displaySide}`} href={href} target="_blank" rel="noreferrer">
+      <span>{label}</span>
+      <strong>Offer</strong>
+      <small>BetDEX</small>
     </a>
   );
 }
@@ -399,7 +411,7 @@ function routeSegment(value: string) {
   return value.trim().toLowerCase();
 }
 
-function bestPricesByOutcome(prices: PricePoint[]): BestOutcomePrices[] {
+function bestPricesByOutcome(prices: PricePoint[], marketOutcomes: Market['marketOutcomes']): BestOutcomePrices[] {
   const grouped = new Map<string, BestOutcomePrices>();
 
   for (const price of prices) {
@@ -418,6 +430,17 @@ function bestPricesByOutcome(prices: PricePoint[]): BestOutcomePrices[] {
     }
 
     grouped.set(price.outcomeId, current);
+  }
+
+  for (const outcome of marketOutcomes) {
+    if (!grouped.has(outcome.outcomeId)) {
+      grouped.set(outcome.outcomeId, {
+        outcomeId: outcome.outcomeId,
+        outcomeName: outcome.outcomeName,
+        back: undefined,
+        lay: undefined
+      });
+    }
   }
 
   return Array.from(grouped.values());

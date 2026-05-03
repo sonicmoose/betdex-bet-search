@@ -34,8 +34,14 @@ export interface Market {
   startsAt: string;
   matched: number;
   liquidity: number;
+  marketOutcomes: MarketOutcome[];
   outcomes: PricePoint[];
   raw: Record<string, unknown>;
+}
+
+export interface MarketOutcome {
+  outcomeId: string;
+  outcomeName: string;
 }
 
 export interface PricePoint {

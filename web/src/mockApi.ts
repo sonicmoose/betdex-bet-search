@@ -1,4 +1,4 @@
-import type { Market, MarketSearchInput, MarketSearchResult, MarketStatus, PricePoint } from './types';
+import type { Market, MarketOutcome, MarketSearchInput, MarketSearchResult, MarketStatus, PricePoint } from './types';
 
 const now = Date.now();
 
@@ -91,6 +91,7 @@ function createMarket(seed: MarketSeed, index: number): Market {
   const marketId = `mkt-${slug(seed.eventName)}-${slug(seed.marketName)}`;
   const matched = 18000 + index * 7350 + (index % 5) * 2200;
   const liquidity = 6200 + index * 980 + (index % 4) * 1650;
+  const outcomes = createOutcomes(seed, index);
 
   return {
     marketId,
@@ -107,13 +108,21 @@ function createMarket(seed: MarketSeed, index: number): Market {
     startsAt: startsAt.toISOString(),
     matched,
     liquidity,
-    outcomes: createOutcomes(seed, index).flatMap(withLayPrice),
+    marketOutcomes: toMarketOutcomes(outcomes),
+    outcomes: outcomes.flatMap(withLayPrice),
     raw: {
       marketType: slug(seed.marketName).toUpperCase().replace(/-/g, '_'),
       currencyId: 'USDC',
       inPlayStatus: seed.inPlay ? 'InPlay' : 'PrePlay'
     }
   };
+}
+
+function toMarketOutcomes(outcomes: PricePoint[]): MarketOutcome[] {
+  return outcomes.map((outcome) => ({
+    outcomeId: outcome.outcomeId,
+    outcomeName: outcome.outcomeName
+  }));
 }
 
 function createOutcomes(seed: MarketSeed, index: number): PricePoint[] {

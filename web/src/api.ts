@@ -1,5 +1,5 @@
 import { markets as mockMarkets, searchMarkets as searchMockMarkets } from './mockApi';
-import type { Market, MarketSearchInput, MarketSearchResult, MarketSort, MarketStatus, MarketUpdate, PricePoint } from './types';
+import type { Market, MarketOutcome, MarketSearchInput, MarketSearchResult, MarketSort, MarketStatus, MarketUpdate, PricePoint } from './types';
 
 const appsyncUrl = import.meta.env.VITE_APPSYNC_GRAPHQL_URL as string | undefined;
 const appsyncApiKey = import.meta.env.VITE_APPSYNC_API_KEY as string | undefined;
@@ -171,6 +171,7 @@ function toMarket(hitId: string, raw: Record<string, unknown>): Market {
   const latestPrices = array(source, 'latestPrices');
   const pricedMarketOutcomes = marketOutcomes.filter(hasPrice);
   const outcomeNameLookup = outcomeNames(source);
+  const marketOutcomeOptions = toMarketOutcomes(marketOutcomes, outcomeNameLookup);
   const outcomes = (pricedMarketOutcomes.length > 0 ? pricedMarketOutcomes : latestPrices)
     .map((price, index) => toPricePoint(price, index, outcomeNameLookup));
   const liquidity = number(source, 'liquidity') ?? sum(outcomes.map((outcome) => outcome.liquidity));
@@ -192,6 +193,7 @@ function toMarket(hitId: string, raw: Record<string, unknown>): Market {
     startsAt: text(source, 'lockAt') ?? text(source, 'expectedStartTime') ?? text(source, 'startsAt') ?? new Date().toISOString(),
     matched: number(source, 'matched') ?? number(source, 'totalMatched') ?? 0,
     liquidity,
+    marketOutcomes: marketOutcomeOptions,
     outcomes,
     raw: source
   };
@@ -347,6 +349,23 @@ function outcomeNames(source: Record<string, unknown>): Map<string, string> {
     }
   }
   return byId;
+}
+
+function toMarketOutcomes(items: Array<Record<string, unknown>>, fallbackNames: Map<string, string>): MarketOutcome[] {
+  const byId = new Map<string, MarketOutcome>();
+  for (const item of items) {
+    const outcomeId = text(item, 'outcomeId') ?? text(item, 'id');
+    const outcomeName = text(item, 'outcomeName') ?? text(item, 'name') ?? (outcomeId ? fallbackNames.get(outcomeId) : undefined);
+    if (outcomeId && outcomeName) {
+      byId.set(outcomeId, { outcomeId, outcomeName });
+    }
+  }
+  for (const [outcomeId, outcomeName] of fallbackNames) {
+    if (!byId.has(outcomeId)) {
+      byId.set(outcomeId, { outcomeId, outcomeName });
+    }
+  }
+  return Array.from(byId.values());
 }
 
 function hasPrice(source: Record<string, unknown>): boolean {
