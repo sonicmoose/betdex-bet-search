@@ -67,7 +67,7 @@ public class OpenSearchWriter {
     document.put("messageType", messageType);
     document.put("marketId", marketId);
     document.put("eventId", eventId);
-    document.put("payload", payload);
+    document.put("payloadJson", jsonString(payload));
     post("/" + dailyIndex(properties.rawAlias(), receivedAt) + "/_doc", document);
   }
 
@@ -432,6 +432,14 @@ public class OpenSearchWriter {
   private byte[] json(Map<String, Object> document) {
     try {
       return objectMapper.writeValueAsBytes(document);
+    } catch (JsonProcessingException e) {
+      throw new IllegalArgumentException("Failed to serialize OpenSearch document", e);
+    }
+  }
+
+  private String jsonString(Map<String, Object> document) {
+    try {
+      return objectMapper.writeValueAsString(document);
     } catch (JsonProcessingException e) {
       throw new IllegalArgumentException("Failed to serialize OpenSearch document", e);
     }

@@ -487,7 +487,7 @@ function getMarketUpdatesResponseTemplate(): string {
       "marketId": "$src.marketId",
       "messageType": "$src.messageType",
       "receivedAt": "$src.receivedAt",
-      "payload": $util.toJson($src.payload)
+      "payload": $util.toJson($util.defaultIfNull($src.payloadJson, "{}"))
     }#if($foreach.hasNext),#end
   #end
 ]`;
