@@ -1,12 +1,13 @@
 export type MarketStatus = 'Initializing' | 'Open' | 'Locked' | 'Suspended' | 'Settling' | 'Settled' | 'Voiding' | 'Voided' | 'Closed';
 export type InPlayFilter = 'Yes' | 'No';
-export type MarketSort = 'Relevance' | 'Start time' | 'Liquidity';
+export type MarketSort = 'Start time' | 'Liquidity';
 
 export interface MarketSearchInput {
   text: string;
   inPlay: InPlayFilter[];
   subCategoryIds: string[];
   eventGroupIds: string[];
+  hasLiquidity: boolean;
   sort: MarketSort;
   page: number;
   pageSize: number;

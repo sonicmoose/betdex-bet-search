@@ -33,13 +33,14 @@ const marketUpdatedSubscription = `
   }
 `;
 
-export async function searchMarkets(input: MarketSearchInput): Promise<MarketSearchResult> {
+export async function searchMarkets(input: MarketSearchInput, signal?: AbortSignal): Promise<MarketSearchResult> {
   if (!isLiveDataSource) {
     return searchMockMarkets(input);
   }
 
   const response = await fetch(appsyncUrl!, {
     method: 'POST',
+    signal,
     headers: {
       'content-type': 'application/json',
       'x-api-key': appsyncApiKey!
@@ -145,6 +146,7 @@ function toGraphqlInput(input: MarketSearchInput) {
     eventGroupId: input.eventGroupIds.length === 1 ? input.eventGroupIds[0] : undefined,
     eventGroupIds: input.eventGroupIds.length > 1 ? input.eventGroupIds : undefined,
     status: 'Open',
+    hasLiquidity: input.hasLiquidity,
     inPlay: input.inPlay.length ? input.inPlay.map((value) => value === 'Yes') : undefined,
     sort: toGraphqlSort(input.sort),
     page: input.page,
@@ -158,9 +160,8 @@ function toGraphqlSort(sort: MarketSort): string {
       return 'START_TIME';
     case 'Liquidity':
       return 'LIQUIDITY';
-    case 'Relevance':
     default:
-      return 'RELEVANCE';
+      return 'START_TIME';
   }
 }
 

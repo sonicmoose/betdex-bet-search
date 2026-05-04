@@ -30,7 +30,8 @@ function App() {
     inPlay: [],
     subCategoryIds: [],
     eventGroupIds: [],
-    sort: 'Relevance',
+    hasLiquidity: true,
+    sort: 'Start time',
     page: 1,
     pageSize: 10
   });
@@ -62,16 +63,20 @@ function App() {
   }, [textValue]);
 
   React.useEffect(() => {
+    const controller = new AbortController();
     let active = true;
     setLoading(true);
     setError(null);
-    searchMarkets(filters).then((result) => {
+    searchMarkets(filters, controller.signal).then((result) => {
       if (active) {
         setSearchResult(result);
         setFilterOptions((current) => mergeFilterOptions(current, deriveFilterOptions(result.items)));
         setLoading(false);
       }
     }).catch((reason: unknown) => {
+      if (reason instanceof DOMException && reason.name === 'AbortError') {
+        return;
+      }
       if (active) {
         setError(reason instanceof Error ? reason.message : 'Search failed');
         setLoading(false);
@@ -79,6 +84,7 @@ function App() {
     });
     return () => {
       active = false;
+      controller.abort();
     };
   }, [filters]);
 
@@ -135,7 +141,7 @@ function App() {
         <Select
           label="Order by"
           value={filters.sort}
-          values={['Relevance', 'Start time', 'Liquidity']}
+          values={['Start time', 'Liquidity']}
           onChange={(sort) => updateFilters({ sort: sort as MarketSort })}
         />
       </section>
@@ -163,6 +169,13 @@ function App() {
             selected={filters.inPlay}
             onChange={(inPlay) => updateFilters({ inPlay: inPlay as InPlayFilter[] })}
           />
+          <ToggleFilter
+            label="Market quality"
+            checked={filters.hasLiquidity}
+            onChange={(hasLiquidity) => updateFilters({ hasLiquidity })}
+          >
+            Has liquidity
+          </ToggleFilter>
         </aside>
 
         <section className="market-results" aria-label="Market results">
@@ -356,6 +369,32 @@ function Select({ label, value, values, onChange }: { label: string; value: stri
         ))}
       </select>
     </label>
+  );
+}
+
+function ToggleFilter({
+  label,
+  checked,
+  onChange,
+  children
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <fieldset className="filter-group">
+      <legend>{label}</legend>
+      <label className={`check-row ${checked ? 'selected' : ''}`}>
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(event) => onChange(event.target.checked)}
+        />
+        <span>{children}</span>
+      </label>
+    </fieldset>
   );
 }
 

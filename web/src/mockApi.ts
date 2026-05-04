@@ -58,7 +58,8 @@ export async function searchMarkets(input: MarketSearchInput): Promise<MarketSea
     const inPlayMatch = input.inPlay.length === 0 || input.inPlay.includes(market.inPlay ? 'Yes' : 'No');
     const sportMatch = input.subCategoryIds.length === 0 || input.subCategoryIds.includes(market.subCategoryId);
     const leagueMatch = input.eventGroupIds.length === 0 || input.eventGroupIds.includes(market.eventGroupId);
-    return textMatch && statusMatch && inPlayMatch && sportMatch && leagueMatch;
+    const liquidityMatch = !input.hasLiquidity || market.liquidity > 0;
+    return textMatch && statusMatch && inPlayMatch && sportMatch && leagueMatch && liquidityMatch;
   });
 
   const sorted = [...filtered].sort((left, right) => {
@@ -67,9 +68,8 @@ export async function searchMarkets(input: MarketSearchInput): Promise<MarketSea
         return new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime();
       case 'Liquidity':
         return right.liquidity - left.liquidity;
-      case 'Relevance':
       default:
-        return 0;
+        return new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime();
     }
   });
 

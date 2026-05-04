@@ -346,6 +346,10 @@ function searchMarketsRequestTemplate(): string {
   #set($hasQuery = true)
   $util.qr($filter.add({"terms":{"raw.status.keyword":$input.statuses}}))
 #end
+#if($input.hasLiquidity == true)
+  #set($hasQuery = true)
+  $util.qr($filter.add({"range":{"liquidity":{"gt":0}}}))
+#end
 #if(!$util.isNull($input.inPlay) && $input.inPlay.size() > 0)
   #set($hasQuery = true)
   #set($wantsLive = false)
@@ -370,7 +374,7 @@ function searchMarketsRequestTemplate(): string {
   #if($input.startsBefore) $util.qr($range.put("lte", $input.startsBefore)) #end
   $util.qr($filter.add({"range":{"raw.lockAt":$range}}))
 #end
-#if($input.sort == "START_TIME")
+#if($util.isNull($input.sort) || $input.sort == "START_TIME" || $input.sort == "RELEVANCE")
   $util.qr($sort.add({"raw.lockAt":{"order":"asc","unmapped_type":"date","missing":"_last"}}))
 #elseif($input.sort == "MATCHED")
   $util.qr($sort.add({"matched":{"order":"desc","unmapped_type":"double","missing":"_last"}}))
