@@ -298,8 +298,8 @@ function searchMarketsRequestTemplate(): string {
 #set($pageSize = $util.defaultIfNull($input.pageSize, 25))
 #if($pageSize < 1)
   #set($pageSize = 25)
-#elseif($pageSize > 100)
-  #set($pageSize = 100)
+#elseif($pageSize > 50)
+  #set($pageSize = 50)
 #end
 #set($page = $util.defaultIfNull($input.page, 1))
 #if($page < 1)
@@ -312,19 +312,19 @@ function searchMarketsRequestTemplate(): string {
 #end
 #if(!$util.isNull($input.eventId))
   #set($hasQuery = true)
-  $util.qr($filter.add({"bool":{"should":[{"term":{"eventId.keyword":$input.eventId}},{"term":{"eventId":$input.eventId}},{"match_phrase":{"eventId":$input.eventId}},{"term":{"raw.eventId.keyword":$input.eventId}},{"term":{"raw.eventId":$input.eventId}},{"match_phrase":{"raw.eventId":$input.eventId}},{"term":{"raw.event_id.keyword":$input.eventId}},{"term":{"raw.event_id":$input.eventId}},{"match_phrase":{"raw.event_id":$input.eventId}}],"minimum_should_match":1}}))
+  $util.qr($filter.add({"bool":{"should":[{"term":{"eventId.keyword":$input.eventId}},{"term":{"raw.eventId.keyword":$input.eventId}}],"minimum_should_match":1}}))
 #end
 #if(!$util.isNull($input.categoryId))
   #set($hasQuery = true)
-  $util.qr($filter.add({"bool":{"should":[{"term":{"categoryId.keyword":$input.categoryId}},{"term":{"categoryId":$input.categoryId}},{"match_phrase":{"categoryId":$input.categoryId}},{"term":{"raw.categoryId.keyword":$input.categoryId}},{"term":{"raw.categoryId":$input.categoryId}},{"match_phrase":{"raw.categoryId":$input.categoryId}},{"term":{"raw.category_id.keyword":$input.categoryId}},{"term":{"raw.category_id":$input.categoryId}},{"match_phrase":{"raw.category_id":$input.categoryId}}],"minimum_should_match":1}}))
+  $util.qr($filter.add({"bool":{"should":[{"term":{"categoryId.keyword":$input.categoryId}},{"term":{"raw.categoryId.keyword":$input.categoryId}}],"minimum_should_match":1}}))
 #end
 #if(!$util.isNull($input.subCategoryId))
   #set($hasQuery = true)
-  $util.qr($filter.add({"bool":{"should":[{"term":{"subCategoryId.keyword":$input.subCategoryId}},{"term":{"subCategoryId":$input.subCategoryId}},{"match_phrase":{"subCategoryId":$input.subCategoryId}},{"term":{"raw.subCategoryId.keyword":$input.subCategoryId}},{"term":{"raw.subCategoryId":$input.subCategoryId}},{"match_phrase":{"raw.subCategoryId":$input.subCategoryId}},{"term":{"raw.subCategory_id.keyword":$input.subCategoryId}},{"term":{"raw.subCategory_id":$input.subCategoryId}},{"match_phrase":{"raw.subCategory_id":$input.subCategoryId}}],"minimum_should_match":1}}))
+  $util.qr($filter.add({"bool":{"should":[{"term":{"subCategoryId.keyword":$input.subCategoryId}},{"term":{"raw.subCategoryId.keyword":$input.subCategoryId}}],"minimum_should_match":1}}))
 #end
 #if(!$util.isNull($input.eventGroupId))
   #set($hasQuery = true)
-  $util.qr($filter.add({"bool":{"should":[{"term":{"eventGroupId.keyword":$input.eventGroupId}},{"term":{"eventGroupId":$input.eventGroupId}},{"match_phrase":{"eventGroupId":$input.eventGroupId}},{"term":{"raw.eventGroupId.keyword":$input.eventGroupId}},{"term":{"raw.eventGroupId":$input.eventGroupId}},{"match_phrase":{"raw.eventGroupId":$input.eventGroupId}},{"term":{"raw.eventGroup_id.keyword":$input.eventGroupId}},{"term":{"raw.eventGroup_id":$input.eventGroupId}},{"match_phrase":{"raw.eventGroup_id":$input.eventGroupId}}],"minimum_should_match":1}}))
+  $util.qr($filter.add({"bool":{"should":[{"term":{"eventGroupId.keyword":$input.eventGroupId}},{"term":{"raw.eventGroupId.keyword":$input.eventGroupId}}],"minimum_should_match":1}}))
 #end
 #if(!$util.isNull($input.status))
   #set($hasQuery = true)
@@ -332,15 +332,15 @@ function searchMarketsRequestTemplate(): string {
 #end
 #if(!$util.isNull($input.categoryIds) && $input.categoryIds.size() > 0)
   #set($hasQuery = true)
-  $util.qr($filter.add({"bool":{"should":[{"terms":{"categoryId.keyword":$input.categoryIds}},{"terms":{"categoryId":$input.categoryIds}},{"terms":{"raw.categoryId.keyword":$input.categoryIds}},{"terms":{"raw.categoryId":$input.categoryIds}},{"terms":{"raw.category_id.keyword":$input.categoryIds}},{"terms":{"raw.category_id":$input.categoryIds}}],"minimum_should_match":1}}))
+  $util.qr($filter.add({"bool":{"should":[{"terms":{"categoryId.keyword":$input.categoryIds}},{"terms":{"raw.categoryId.keyword":$input.categoryIds}}],"minimum_should_match":1}}))
 #end
 #if(!$util.isNull($input.subCategoryIds) && $input.subCategoryIds.size() > 0)
   #set($hasQuery = true)
-  $util.qr($filter.add({"bool":{"should":[{"terms":{"subCategoryId.keyword":$input.subCategoryIds}},{"terms":{"subCategoryId":$input.subCategoryIds}},{"terms":{"raw.subCategoryId.keyword":$input.subCategoryIds}},{"terms":{"raw.subCategoryId":$input.subCategoryIds}},{"terms":{"raw.subCategory_id.keyword":$input.subCategoryIds}},{"terms":{"raw.subCategory_id":$input.subCategoryIds}}],"minimum_should_match":1}}))
+  $util.qr($filter.add({"bool":{"should":[{"terms":{"subCategoryId.keyword":$input.subCategoryIds}},{"terms":{"raw.subCategoryId.keyword":$input.subCategoryIds}}],"minimum_should_match":1}}))
 #end
 #if(!$util.isNull($input.eventGroupIds) && $input.eventGroupIds.size() > 0)
   #set($hasQuery = true)
-  $util.qr($filter.add({"bool":{"should":[{"terms":{"eventGroupId.keyword":$input.eventGroupIds}},{"terms":{"eventGroupId":$input.eventGroupIds}},{"terms":{"raw.eventGroupId.keyword":$input.eventGroupIds}},{"terms":{"raw.eventGroupId":$input.eventGroupIds}},{"terms":{"raw.eventGroup_id.keyword":$input.eventGroupIds}},{"terms":{"raw.eventGroup_id":$input.eventGroupIds}}],"minimum_should_match":1}}))
+  $util.qr($filter.add({"bool":{"should":[{"terms":{"eventGroupId.keyword":$input.eventGroupIds}},{"terms":{"raw.eventGroupId.keyword":$input.eventGroupIds}}],"minimum_should_match":1}}))
 #end
 #if(!$util.isNull($input.statuses) && $input.statuses.size() > 0)
   #set($hasQuery = true)
@@ -395,7 +395,7 @@ function searchMarketsRequestTemplate(): string {
     "body": {
       "from": $from,
       "size": $pageSize,
-      "track_total_hits": true,
+      "track_total_hits": 1000,
       "sort": $util.toJson($sort),
       "query": $util.toJson($query)
     }
