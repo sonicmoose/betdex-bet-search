@@ -77,7 +77,7 @@ export class BetDexIndexerStack extends Stack {
       version: opensearch.EngineVersion.OPENSEARCH_2_11,
       capacity: {
         dataNodes: 1,
-        dataNodeInstanceType: 't3.small.search',
+        dataNodeInstanceType: 't3.medium.search',
         multiAzWithStandbyEnabled: false
       },
       zoneAwareness: {
@@ -395,7 +395,7 @@ function searchMarketsRequestTemplate(): string {
     "body": {
       "from": $from,
       "size": $pageSize,
-      "track_total_hits": 1000,
+      "track_total_hits": true,
       "sort": $util.toJson($sort),
       "query": $util.toJson($query)
     }
