@@ -3,8 +3,17 @@ package com.betsearch.betdex.appsync;
 import com.betsearch.betdex.config.AppSyncProperties;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import java.time.Instant;
 import java.util.Map;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -29,6 +38,10 @@ public class AppSyncMarketUpdatePublisher {
   private final AppSyncProperties properties;
   private final ObjectMapper objectMapper;
   private final WebClient webClient;
+  private final BlockingQueue<PublishRequest> queue;
+  private final ExecutorService executor = Executors.newSingleThreadExecutor();
+  private final AtomicBoolean stopped = new AtomicBoolean(false);
+  private final AtomicInteger droppedSinceLastLog = new AtomicInteger();
 
   public AppSyncMarketUpdatePublisher(
       AppSyncProperties properties,
@@ -37,6 +50,12 @@ public class AppSyncMarketUpdatePublisher {
     this.properties = properties;
     this.objectMapper = objectMapper;
     this.webClient = webClientBuilder.build();
+    this.queue = new ArrayBlockingQueue<>(Math.max(1, properties.publishQueueCapacity()));
+  }
+
+  @PostConstruct
+  void start() {
+    executor.submit(this::publishLoop);
   }
 
   public void publishMarketUpdated(
@@ -50,18 +69,48 @@ public class AppSyncMarketUpdatePublisher {
         || marketId == null || marketId.isBlank()) {
       return;
     }
+    if (!properties.publishPriceUpdates() && ("Snapshot".equals(updateType) || "Incremental".equals(updateType))) {
+      return;
+    }
 
     try {
-      Map<String, Object> input = Map.of(
-          "marketId", marketId,
-          "eventId", eventId == null ? "" : eventId,
-          "updateType", updateType == null ? "" : updateType,
-          "receivedAt", receivedAt.toString(),
-          "source", objectMapper.writeValueAsString(source));
-      Map<String, Object> body = Map.of(
-          "query", MUTATION,
-          "variables", Map.of("input", input));
+      String sourceJson = objectMapper.writeValueAsString(source);
+      boolean accepted = queue.offer(new PublishRequest(marketId, eventId, updateType, receivedAt, sourceJson));
+      if (!accepted) {
+        int dropped = droppedSinceLastLog.incrementAndGet();
+        if (dropped == 1 || dropped % 100 == 0) {
+          log.warn("Dropped AppSync market update because publish queue is full dropped={}", dropped);
+        }
+      }
+    } catch (JsonProcessingException e) {
+      log.warn("Failed to serialize AppSync market update marketId={}", marketId, e);
+    }
+  }
 
+  private void publishLoop() {
+    while (!stopped.get() && !Thread.currentThread().isInterrupted()) {
+      try {
+        publish(queue.take());
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      } catch (RuntimeException e) {
+        log.warn("Unexpected AppSync publish worker failure", e);
+      }
+    }
+  }
+
+  private void publish(PublishRequest request) {
+    Map<String, Object> input = Map.of(
+        "marketId", request.marketId(),
+        "eventId", request.eventId() == null ? "" : request.eventId(),
+        "updateType", request.updateType() == null ? "" : request.updateType(),
+        "receivedAt", request.receivedAt().toString(),
+        "source", request.sourceJson());
+    Map<String, Object> body = Map.of(
+        "query", MUTATION,
+        "variables", Map.of("input", input));
+
+    try {
       webClient.post()
           .uri(properties.graphqlUrl())
           .header(HttpHeaders.CONTENT_TYPE, "application/json")
@@ -69,10 +118,26 @@ public class AppSyncMarketUpdatePublisher {
           .bodyValue(body)
           .retrieve()
           .bodyToMono(String.class)
-          .doOnError(error -> log.warn("Failed to publish AppSync market update marketId={}", marketId, error))
-          .subscribe();
-    } catch (JsonProcessingException e) {
-      log.warn("Failed to serialize AppSync market update marketId={}", marketId, e);
+          .block(properties.publishTimeout());
+    } catch (RuntimeException e) {
+      log.warn("Failed to publish AppSync market update marketId={}", request.marketId(), e);
     }
+  }
+
+  @PreDestroy
+  void stop() throws InterruptedException {
+    stopped.set(true);
+    executor.shutdownNow();
+    if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+      log.warn("Timed out waiting for AppSync publish worker to stop");
+    }
+  }
+
+  private record PublishRequest(
+      String marketId,
+      String eventId,
+      String updateType,
+      Instant receivedAt,
+      String sourceJson) {
   }
 }

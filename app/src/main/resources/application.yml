@@ -28,6 +28,9 @@ opensearch:
 appsync:
   graphql-url: ${APPSYNC_GRAPHQL_URL:}
   api-key: ${APPSYNC_API_KEY:}
+  publish-price-updates: ${APPSYNC_PUBLISH_PRICE_UPDATES:false}
+  publish-queue-capacity: ${APPSYNC_PUBLISH_QUEUE_CAPACITY:1000}
+  publish-timeout: ${APPSYNC_PUBLISH_TIMEOUT:2s}
 
 timestream:
   enabled: ${TIMESTREAM_ENABLED:false}

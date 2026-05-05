@@ -118,6 +118,10 @@ public class OpenSearchWriter {
     if (marketId == null) {
       return Map.of();
     }
+    if (isNonOpen(payload)) {
+      deleteMarket(marketId);
+      return currentDocument(marketId, receivedAt, payload);
+    }
     Map<String, Object> document = currentDocument(marketId, receivedAt, payload);
     upsert(properties.marketsCurrentIndex(), marketId, document);
     return document;
@@ -128,12 +132,20 @@ public class OpenSearchWriter {
       return Map.of();
     }
     Map<String, Object> patch = currentDocument(marketId, receivedAt, payload);
+    if (isNonOpen(payload)) {
+      deleteMarket(marketId);
+      return patch;
+    }
     upsert(properties.marketsCurrentIndex(), marketId, patch);
     return patch;
   }
 
   public void enrichMarket(String marketId, Instant receivedAt, Map<String, Object> enrichment) {
     if (marketId == null || enrichment.isEmpty()) {
+      return;
+    }
+    if (isNonOpen(enrichment)) {
+      deleteMarket(marketId);
       return;
     }
 
@@ -208,6 +220,11 @@ public class OpenSearchWriter {
     }
 
     PriceUpdate first = prices.getFirst();
+    if (isNonOpen(enrichment)) {
+      deleteMarket(first.marketId());
+      return currentDocument(first.marketId(), first.receivedAt(), enrichment);
+    }
+
     Map<String, Object> document = currentPriceDocument(first, prices);
     applyTextEnrichment(document, enrichment);
     Map<String, Object> payload = Map.of(
@@ -242,6 +259,18 @@ public class OpenSearchWriter {
         "upsert", document);
     post("/" + properties.marketsCurrentIndex() + "/_update/" + urlEncode(first.marketId()), payload);
     return document;
+  }
+
+  public void deleteMarket(String marketId) {
+    if (marketId == null || marketId.isBlank()) {
+      return;
+    }
+    requestWithRetry("DELETE", "/" + properties.marketsCurrentIndex() + "/_doc/" + urlEncode(marketId), new byte[0]);
+  }
+
+  private boolean isNonOpen(Map<String, Object> payload) {
+    Object status = payload == null ? null : payload.get("status");
+    return status != null && !"Open".equalsIgnoreCase(status.toString());
   }
 
   private void applyTextEnrichment(Map<String, Object> document, Map<String, Object> enrichment) {
@@ -491,7 +520,7 @@ public class OpenSearchWriter {
     for (int attempt = 1; attempt <= 3; attempt++) {
       try {
         HttpResponse<String> response = httpClient.send(signedRequest(method, path, body), HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() >= 200 && response.statusCode() < 300) {
+        if (response.statusCode() >= 200 && response.statusCode() < 300 || "DELETE".equals(method) && response.statusCode() == 404) {
           return response.body();
         }
         last = new IllegalStateException("OpenSearch returned " + response.statusCode() + ": " + response.body());
