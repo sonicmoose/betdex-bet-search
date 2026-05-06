@@ -230,6 +230,47 @@ public class OpenSearchWriter {
     return upsertMarketPrices(prices, Map.of());
   }
 
+  public Map<String, Object> clearMarketPrices(JsonNode root, Instant receivedAt, Map<String, Object> enrichment) {
+    String marketId = text(root, "marketId");
+    if (marketId == null) {
+      return Map.of();
+    }
+    if (isNonOpen(enrichment)) {
+      deleteMarket(marketId);
+      return currentDocument(marketId, receivedAt, enrichment);
+    }
+
+    Map<String, Object> document = currentEmptyPriceDocument(root, receivedAt);
+    applyTextEnrichment(document, enrichment);
+    Map<String, Object> payload = Map.of(
+        "script", Map.of(
+            "lang", "painless",
+            "source", """
+                for (entry in params.patch.entrySet()) {
+                  if (entry.getKey() != 'raw') {
+                    ctx._source[entry.getKey()] = entry.getValue();
+                  }
+                }
+                ctx._source.latestPrices = [];
+                ctx._source.liquidity = 0;
+                if (ctx._source.raw == null) {
+                  ctx._source.raw = params.patch.raw;
+                } else {
+                  for (entry in params.patch.raw.entrySet()) {
+                    if (entry.getKey() != 'status' || ctx._source.raw.status == null || entry.getValue() != 'Open') {
+                      ctx._source.raw[entry.getKey()] = entry.getValue();
+                    }
+                  }
+                  ctx._source.raw.marketOutcomes = [];
+                  ctx._source.raw.liquidity = 0;
+                }
+                """,
+            "params", scriptParams(document, enrichment)),
+        "upsert", document);
+    post("/" + properties.marketsCurrentIndex() + "/_update/" + urlEncode(marketId), payload);
+    return document;
+  }
+
   public Map<String, Object> upsertMarketPrices(List<PriceUpdate> prices, Map<String, Object> enrichment) {
     if (prices.isEmpty() || prices.getFirst().marketId() == null) {
       return Map.of();
@@ -488,6 +529,41 @@ public class OpenSearchWriter {
     return document;
   }
 
+  private Map<String, Object> currentEmptyPriceDocument(JsonNode root, Instant receivedAt) {
+    String marketId = text(root, "marketId");
+    String eventId = text(root, "eventId");
+
+    Map<String, Object> raw = new LinkedHashMap<>();
+    raw.put("marketId", marketId);
+    raw.put("eventId", eventId);
+    raw.put("eventGroupId", text(root, "eventGroupId"));
+    raw.put("categoryId", text(root, "categoryId"));
+    raw.put("categoryName", text(root, "categoryId"));
+    raw.put("subCategoryId", text(root, "subCategoryId"));
+    raw.put("subCategoryName", text(root, "subCategoryId"));
+    raw.put("name", marketId);
+    raw.put("eventName", eventId == null ? marketId : eventId);
+    raw.put("status", "Open");
+    raw.put("inPlayStatus", "NotApplicable");
+    raw.put("liquidity", BigDecimal.ZERO);
+    raw.put("marketOutcomes", List.of());
+    raw.put("latestPriceUpdateType", text(root, "updateType"));
+
+    Map<String, Object> document = new LinkedHashMap<>();
+    document.put("id", marketId);
+    document.put("marketId", marketId);
+    document.put("eventId", eventId);
+    document.put("eventGroupId", text(root, "eventGroupId"));
+    document.put("categoryId", text(root, "categoryId"));
+    document.put("subCategoryId", text(root, "subCategoryId"));
+    document.put("receivedAt", receivedAt.toString());
+    document.put("liquidity", BigDecimal.ZERO);
+    document.put("latestPrices", List.of());
+    document.put("latestPriceUpdateType", text(root, "updateType"));
+    document.put("raw", raw);
+    return document;
+  }
+
   private BigDecimal totalLiquidity(List<PriceUpdate> prices) {
     return prices.stream()
         .map(PriceUpdate::liquidity)
@@ -508,6 +584,11 @@ public class OpenSearchWriter {
     document.put("change", price.change());
     document.put("validAt", (price.validAt() == null ? price.receivedAt() : price.validAt()).toString());
     return document;
+  }
+
+  private String text(JsonNode node, String field) {
+    JsonNode value = node.get(field);
+    return value == null || value.isNull() ? null : value.asText();
   }
 
   private void upsert(String index, String id, Map<String, Object> document) {

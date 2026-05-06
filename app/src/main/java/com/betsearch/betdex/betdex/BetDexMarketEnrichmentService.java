@@ -82,6 +82,21 @@ public class BetDexMarketEnrichmentService {
     }
   }
 
+  public void requestMarketEnrichment(JsonNode marketMessage) {
+    String eventId = text(marketMessage, "eventId");
+    String marketId = text(marketMessage, "marketId");
+    Instant now = Instant.now();
+    if (eventId != null && !eventId.isBlank() && !isCached(eventCache, eventId, now)) {
+      pendingEventIds.add(eventId);
+    }
+    if (marketId != null && !marketId.isBlank() && !isCached(marketCache, marketId, now)) {
+      pendingMarketIds.add(marketId);
+    }
+    if (!pendingEventIds.isEmpty() || !pendingMarketIds.isEmpty()) {
+      scheduleFlush();
+    }
+  }
+
   public Map<String, Object> enrichmentForPrices(List<PriceUpdate> prices) {
     if (prices.isEmpty()) {
       return Map.of();
@@ -650,6 +665,11 @@ public class BetDexMarketEnrichmentService {
       }
     }
     return null;
+  }
+
+  private String text(JsonNode node, String field) {
+    JsonNode value = node.get(field);
+    return value == null || value.isNull() ? null : value.asText();
   }
 
   private String firstReferenceId(Object value) {

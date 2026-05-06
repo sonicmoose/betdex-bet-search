@@ -155,4 +155,27 @@ class MarketMessageHandlerTest {
     verify(marketEnrichmentService).requestMarketEnrichment(enrichmentCaptor.capture());
     org.assertj.core.api.Assertions.assertThat(enrichmentCaptor.getValue()).hasSize(1);
   }
+
+  @Test
+  void clearsCurrentPricesWhenSnapshotContainsNoPrices() {
+    when(marketEnrichmentService.cachedEnrichmentForPrices(any())).thenReturn(Map.of());
+    when(openSearchWriter.clearMarketPrices(any(), any(), eq(Map.of()))).thenReturn(Map.of("marketId", "m-1", "latestPrices", List.of()));
+
+    handler.handle("""
+        {
+          "updateType": "Snapshot",
+          "marketId": "m-1",
+          "eventId": "e-1",
+          "eventGroupId": "eg-1",
+          "categoryId": "cat-1",
+          "subCategoryId": "sub-1",
+          "prices": []
+        }
+        """);
+
+    verify(openSearchWriter).clearMarketPrices(any(), any(), eq(Map.of()));
+    verify(openSearchWriter, never()).upsertMarketPrices(any(), any());
+    verify(marketUpdatePublisher).publishMarketUpdated(eq("m-1"), eq("e-1"), eq("Snapshot"), any(), any());
+    verify(marketEnrichmentService).requestMarketEnrichment(any(com.fasterxml.jackson.databind.JsonNode.class));
+  }
 }

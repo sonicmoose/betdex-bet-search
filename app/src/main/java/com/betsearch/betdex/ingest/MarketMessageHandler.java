@@ -116,6 +116,12 @@ public class MarketMessageHandler {
         if (enrichment == null) {
           enrichment = Collections.emptyMap();
         }
+        if (prices.isEmpty() && "Snapshot".equals(text(root, "updateType"))) {
+          Map<String, Object> currentMarket = openSearchWriter.clearMarketPrices(root, receivedAt, enrichment);
+          publishMarketUpdate(text(root, "marketId"), text(root, "eventId"), text(root, "updateType"), receivedAt, currentMarket);
+          marketEnrichmentService.requestMarketEnrichment(root);
+          return;
+        }
         if (ingestProperties.priceHistoryEnabled()) {
           for (PriceUpdate price : prices) {
             openSearchWriter.indexPrice(price, enrichment);
