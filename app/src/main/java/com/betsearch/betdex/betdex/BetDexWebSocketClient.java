@@ -16,6 +16,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
@@ -110,10 +111,27 @@ public class BetDexWebSocketClient implements ApplicationRunner {
   }
 
   private void sendSubscriptionFrames(WebSocket socket) {
-    SUBSCRIPTION_TYPES.forEach(type -> send(socket, Map.of(
-        "action", "subscribe",
-        "subscriptionType", type,
-        "subscriptionIds", List.of("*"))));
+    List<String> subscriptionIds = subscriptionIds();
+    SUBSCRIPTION_TYPES.forEach(type -> {
+      log.info("Subscribing to BetDEX stream type={} subscriptionIds={}", type, subscriptionIds);
+      send(socket, Map.of(
+          "action", "subscribe",
+          "subscriptionType", type,
+          "subscriptionIds", subscriptionIds));
+    });
+  }
+
+  private List<String> subscriptionIds() {
+    String configured = properties.subscriptionIds();
+    if (configured == null || configured.isBlank()) {
+      return List.of("*");
+    }
+    List<String> ids = Arrays.stream(configured.split(","))
+        .map(String::trim)
+        .filter(id -> !id.isBlank())
+        .distinct()
+        .toList();
+    return ids.isEmpty() ? List.of("*") : ids;
   }
 
   private void send(WebSocket socket, Map<String, ?> frame) {
@@ -282,6 +300,7 @@ public class BetDexWebSocketClient implements ApplicationRunner {
           promote(this, webSocket);
           log.info("BetDEX replacement WebSocket received first data message and is now active connection={}", id);
         }
+        logReceivedMessage(message, kind);
         offerDeduped(message);
       }
       webSocket.request(1);
@@ -340,6 +359,28 @@ public class BetDexWebSocketClient implements ApplicationRunner {
     private String text(JsonNode node, String field) {
       JsonNode value = node.get(field);
       return value == null || value.isNull() ? null : value.asText();
+    }
+
+    private void logReceivedMessage(String message, MessageKind kind) {
+      if (!ingestProperties.messageLoggingEnabled()) {
+        return;
+      }
+
+      try {
+        JsonNode node = objectMapper.readTree(message);
+        log.info(
+            "BetDEX WebSocket message received connection={} replacement={} kind={} type={} subscriptionType={} marketId={} eventId={} updateType={}",
+            id,
+            replacement,
+            kind,
+            text(node, "type"),
+            text(node, "subscriptionType"),
+            text(node, "marketId"),
+            text(node, "eventId"),
+            text(node, "updateType"));
+      } catch (JsonProcessingException e) {
+        log.info("BetDEX WebSocket non-JSON message received connection={} replacement={} kind={}", id, replacement, kind);
+      }
     }
   }
 

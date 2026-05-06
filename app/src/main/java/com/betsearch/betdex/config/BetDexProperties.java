@@ -15,6 +15,7 @@ public record BetDexProperties(
     String marketsEventIdsParam,
     String marketsPageParam,
     String marketsPageSizeParam,
+    String subscriptionIds,
     int marketsBatchSize,
     int marketsFirstPage,
     int marketsPageSize,

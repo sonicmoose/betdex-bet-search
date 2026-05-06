@@ -9,6 +9,7 @@ betdex:
   markets-event-ids-param: ${BETDEX_MARKETS_EVENT_IDS_PARAM:eventIds}
   markets-page-param: ${BETDEX_MARKETS_PAGE_PARAM:page}
   markets-page-size-param: ${BETDEX_MARKETS_PAGE_SIZE_PARAM:size}
+  subscription-ids: ${BETDEX_SUBSCRIPTION_IDS:*}
   markets-batch-size: ${BETDEX_MARKETS_BATCH_SIZE:50}
   markets-first-page: ${BETDEX_MARKETS_FIRST_PAGE:0}
   markets-page-size: ${BETDEX_MARKETS_PAGE_SIZE:100}
