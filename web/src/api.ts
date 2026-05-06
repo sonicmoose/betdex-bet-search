@@ -173,10 +173,11 @@ function toMarket(hitId: string, raw: Record<string, unknown>): Market {
   const marketId = text(source, 'marketId') ?? text(source, 'id') ?? hitId;
   const marketOutcomes = array(source, 'marketOutcomes');
   const latestPrices = array(source, 'latestPrices');
+  const pricedLatestPrices = latestPrices.filter(hasPrice);
   const pricedMarketOutcomes = marketOutcomes.filter(hasPrice);
   const outcomeNameLookup = outcomeNames(source);
   const marketOutcomeOptions = toMarketOutcomes(marketOutcomes, outcomeNameLookup);
-  const outcomes = (pricedMarketOutcomes.length > 0 ? pricedMarketOutcomes : latestPrices)
+  const outcomes = (pricedLatestPrices.length > 0 ? pricedLatestPrices : pricedMarketOutcomes)
     .map((price, index) => toPricePoint(price, index, outcomeNameLookup));
   const liquidity = number(source, 'liquidity') ?? sum(outcomes.map((outcome) => outcome.liquidity));
   const event = record(source, 'event');

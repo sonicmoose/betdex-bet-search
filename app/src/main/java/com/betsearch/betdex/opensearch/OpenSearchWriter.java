@@ -321,13 +321,16 @@ public class OpenSearchWriter {
                   ctx._source.liquidity = totalLiquidity;
                 }
                 if (ctx._source.raw == null) {
-                  ctx._source.raw = params.patch.raw;
-                } else if (params.patch.name != null || params.patch.eventName != null || params.outcomeNames != null) {
-                  for (entry in params.patch.raw.entrySet()) {
+                  ctx._source.raw = [:];
+                }
+                for (entry in params.patch.raw.entrySet()) {
+                  if (entry.getKey() != 'marketOutcomes' && entry.getKey() != 'liquidity') {
                     if (entry.getKey() != 'status' || ctx._source.raw.status == null || entry.getValue() != 'Open') {
                       ctx._source.raw[entry.getKey()] = entry.getValue();
                     }
                   }
+                }
+                if (params.patch.name != null || params.patch.eventName != null || params.outcomeNames != null) {
                   if (params.outcomeNames != null && ctx._source.raw.marketOutcomes != null) {
                     for (price in ctx._source.raw.marketOutcomes) {
                       def name = params.outcomeNames[price.outcomeId];
@@ -338,10 +341,9 @@ public class OpenSearchWriter {
                     }
                   }
                 }
-                if (incremental) {
-                  ctx._source.raw.marketOutcomes = ctx._source.latestPrices;
-                  ctx._source.raw.liquidity = ctx._source.liquidity;
-                }
+                ctx._source.raw.marketOutcomes = ctx._source.latestPrices == null ? [] : ctx._source.latestPrices;
+                ctx._source.raw.liquidity = ctx._source.liquidity == null ? 0 : ctx._source.liquidity;
+                ctx._source.raw.latestPriceUpdateType = params.patch.latestPriceUpdateType;
                 """,
             "params", scriptParams(document, enrichment)),
         "upsert", document);
