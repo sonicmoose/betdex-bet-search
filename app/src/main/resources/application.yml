@@ -28,7 +28,7 @@ opensearch:
 appsync:
   graphql-url: ${APPSYNC_GRAPHQL_URL:}
   api-key: ${APPSYNC_API_KEY:}
-  publish-price-updates: ${APPSYNC_PUBLISH_PRICE_UPDATES:false}
+  publish-price-updates: ${APPSYNC_PUBLISH_PRICE_UPDATES:true}
   publish-queue-capacity: ${APPSYNC_PUBLISH_QUEUE_CAPACITY:1000}
   publish-timeout: ${APPSYNC_PUBLISH_TIMEOUT:2s}
 
@@ -42,7 +42,7 @@ ingest:
   worker-count: ${INGEST_WORKER_COUNT:6}
   raw-index-enabled: ${INGEST_RAW_INDEX_ENABLED:false}
   price-history-enabled: ${INGEST_PRICE_HISTORY_ENABLED:false}
-  message-logging-enabled: ${INGEST_MESSAGE_LOGGING_ENABLED:false}
+  message-logging-enabled: ${INGEST_MESSAGE_LOGGING_ENABLED:true}
   reconnect:
     initial-delay: ${INGEST_RECONNECT_INITIAL_DELAY:1s}
     max-delay: ${INGEST_RECONNECT_MAX_DELAY:1m}
