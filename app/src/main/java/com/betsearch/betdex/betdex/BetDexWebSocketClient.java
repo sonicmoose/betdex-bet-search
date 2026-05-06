@@ -368,19 +368,44 @@ public class BetDexWebSocketClient implements ApplicationRunner {
 
       try {
         JsonNode node = objectMapper.readTree(message);
+        JsonNode payload = messageNode(node);
         log.info(
             "BetDEX WebSocket message received connection={} replacement={} kind={} type={} subscriptionType={} marketId={} eventId={} updateType={}",
             id,
             replacement,
             kind,
-            text(node, "type"),
-            text(node, "subscriptionType"),
-            text(node, "marketId"),
-            text(node, "eventId"),
-            text(node, "updateType"));
+            firstText(node, payload, "messageType", "type"),
+            firstText(node, payload, "subscriptionType"),
+            firstText(node, payload, "marketId", "id"),
+            firstText(node, payload, "eventId"),
+            firstText(node, payload, "updateType"));
       } catch (JsonProcessingException e) {
         log.info("BetDEX WebSocket non-JSON message received connection={} replacement={} kind={}", id, replacement, kind);
       }
+    }
+
+    private JsonNode messageNode(JsonNode root) {
+      for (String field : List.of("data", "payload", "message")) {
+        JsonNode candidate = root.get(field);
+        if (candidate != null && candidate.isObject()) {
+          return candidate;
+        }
+      }
+      return root;
+    }
+
+    private String firstText(JsonNode root, JsonNode message, String... fields) {
+      for (String field : fields) {
+        String value = text(root, field);
+        if (value != null) {
+          return value;
+        }
+        value = text(message, field);
+        if (value != null) {
+          return value;
+        }
+      }
+      return null;
     }
   }
 
