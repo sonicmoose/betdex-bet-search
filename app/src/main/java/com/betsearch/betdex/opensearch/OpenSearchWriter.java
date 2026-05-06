@@ -288,10 +288,37 @@ public class OpenSearchWriter {
         "script", Map.of(
             "lang", "painless",
             "source", """
+                boolean incremental = params.patch.latestPriceUpdateType == 'Incremental';
                 for (entry in params.patch.entrySet()) {
                   if (entry.getKey() != 'raw') {
+                    if (incremental && (entry.getKey() == 'latestPrices' || entry.getKey() == 'liquidity')) {
+                      continue;
+                    }
                     ctx._source[entry.getKey()] = entry.getValue();
                   }
+                }
+                if (incremental) {
+                  if (ctx._source.latestPrices == null) {
+                    ctx._source.latestPrices = [];
+                  }
+                  for (patchPrice in params.patch.latestPrices) {
+                    for (int i = ctx._source.latestPrices.size() - 1; i >= 0; i--) {
+                      def current = ctx._source.latestPrices[i];
+                      if (current.outcomeId == patchPrice.outcomeId && current.side == patchPrice.side && current.price == patchPrice.price) {
+                        ctx._source.latestPrices.remove(i);
+                      }
+                    }
+                    if (patchPrice.liquidity != null && patchPrice.liquidity > 0) {
+                      ctx._source.latestPrices.add(patchPrice);
+                    }
+                  }
+                  double totalLiquidity = 0;
+                  for (price in ctx._source.latestPrices) {
+                    if (price.liquidity != null) {
+                      totalLiquidity += price.liquidity;
+                    }
+                  }
+                  ctx._source.liquidity = totalLiquidity;
                 }
                 if (ctx._source.raw == null) {
                   ctx._source.raw = params.patch.raw;
@@ -310,6 +337,10 @@ public class OpenSearchWriter {
                       }
                     }
                   }
+                }
+                if (incremental) {
+                  ctx._source.raw.marketOutcomes = ctx._source.latestPrices;
+                  ctx._source.raw.liquidity = ctx._source.liquidity;
                 }
                 """,
             "params", scriptParams(document, enrichment)),

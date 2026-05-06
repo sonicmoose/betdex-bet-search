@@ -98,7 +98,7 @@ function App() {
         setSearchResult((current) => ({
           ...current,
           items: update.source!.status === 'Open'
-            ? current.items.map((market) => market.marketId === update.marketId ? { ...market, ...update.source! } : market)
+            ? current.items.map((market) => market.marketId === update.marketId ? mergeMarketUpdate(market, update.source!, update.updateType) : market)
             : current.items.filter((market) => market.marketId !== update.marketId),
           total: update.source!.status === 'Open' ? current.total : Math.max(0, current.total - 1)
         }));
@@ -243,6 +243,42 @@ function MarketRow({ market }: { market: Market }) {
       </div>
     </article>
   );
+}
+
+function mergeMarketUpdate(current: Market, update: Market, updateType?: string): Market {
+  if (updateType === 'Incremental') {
+    const outcomes = mergePricePoints(current.outcomes, update.outcomes);
+    return {
+      ...current,
+      ...update,
+      marketOutcomes: update.marketOutcomes.length > 0 ? update.marketOutcomes : current.marketOutcomes,
+      outcomes,
+      liquidity: outcomes.reduce((total, outcome) => total + outcome.liquidity, 0)
+    };
+  }
+
+  return {
+    ...current,
+    ...update,
+    marketOutcomes: update.marketOutcomes.length > 0 ? update.marketOutcomes : current.marketOutcomes
+  };
+}
+
+function mergePricePoints(current: PricePoint[], updates: PricePoint[]) {
+  const byKey = new Map(current.map((price) => [priceKey(price), price]));
+  for (const price of updates) {
+    const key = priceKey(price);
+    if (price.liquidity <= 0) {
+      byKey.delete(key);
+    } else {
+      byKey.set(key, price);
+    }
+  }
+  return Array.from(byKey.values());
+}
+
+function priceKey(price: PricePoint) {
+  return `${price.outcomeId}|${price.side}|${price.price}`;
 }
 
 function OutcomePrices({ market, outcome }: { market: Market; outcome: BestOutcomePrices }) {
