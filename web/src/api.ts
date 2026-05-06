@@ -89,7 +89,10 @@ export function subscribeToMarketUpdates(
   let closed = false;
 
   socket.addEventListener('open', () => {
-    socket.send(JSON.stringify({ type: 'connection_init' }));
+    socket.send(JSON.stringify({
+      type: 'connection_init',
+      payload: appsyncAuthorization()
+    }));
   });
   socket.addEventListener('message', (event) => {
     const message = JSON.parse(event.data as string) as AppSyncRealtimeMessage;
@@ -251,7 +254,7 @@ function appsyncRealtimeUrl() {
 }
 
 function base64Url(value: string) {
-  return btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return btoa(value).replace(/\+/g, '-').replace(/\//g, '_');
 }
 
 function normalizeSource(source: Record<string, unknown>): Record<string, unknown> {
