@@ -83,13 +83,16 @@ public class OpenSearchWriter {
 
     int pageSize = Math.min(500, maxResults);
     Set<String> marketIds = new LinkedHashSet<>();
-    for (int from = 0; from < maxResults; from += pageSize) {
-      Map<String, Object> payload = Map.of(
-          "from", from,
-          "size", Math.min(pageSize, maxResults - from),
-          "_source", List.of("marketId", "raw.marketId"),
-          "sort", List.of(Map.of("_id", Map.of("order", "asc"))),
-          "query", Map.of("term", Map.of("raw.status.keyword", "Open")));
+    List<String> searchAfter = null;
+    while (marketIds.size() < maxResults) {
+      Map<String, Object> payload = new LinkedHashMap<>();
+      payload.put("size", Math.min(pageSize, maxResults - marketIds.size()));
+      payload.put("_source", List.of("marketId", "raw.marketId"));
+      payload.put("sort", List.of(Map.of("_id", Map.of("order", "asc"))));
+      payload.put("query", Map.of("term", Map.of("raw.status.keyword", "Open")));
+      if (searchAfter != null) {
+        payload.put("search_after", searchAfter);
+      }
 
       String response = postForResponse("/" + properties.marketsCurrentIndex() + "/_search", payload);
       try {
@@ -97,21 +100,34 @@ public class OpenSearchWriter {
         if (!hits.isArray() || hits.isEmpty()) {
           break;
         }
+        JsonNode lastSort = null;
         for (JsonNode hit : hits) {
           String marketId = firstText(hit.path("_source"), "marketId", "raw.marketId");
           if (marketId != null && !marketId.isBlank()) {
             marketIds.add(marketId);
           }
+          lastSort = hit.path("sort");
+        }
+        searchAfter = sortValues(lastSort);
+        if (searchAfter.isEmpty()) {
+          break;
         }
       } catch (JsonProcessingException e) {
         throw new IllegalStateException("Failed to parse OpenSearch current market search response", e);
       }
-
-      if (marketIds.size() >= maxResults) {
-        break;
-      }
     }
     return new ArrayList<>(marketIds);
+  }
+
+  private List<String> sortValues(JsonNode sort) {
+    if (sort == null || !sort.isArray()) {
+      return List.of();
+    }
+    List<String> values = new ArrayList<>();
+    for (JsonNode value : sort) {
+      values.add(value.asText());
+    }
+    return values;
   }
 
   public Map<String, Object> upsertMarket(String marketId, Instant receivedAt, Map<String, Object> payload) {

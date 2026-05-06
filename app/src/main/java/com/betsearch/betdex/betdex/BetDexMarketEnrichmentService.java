@@ -144,16 +144,25 @@ public class BetDexMarketEnrichmentService {
 
     Instant now = Instant.now();
     List<Map<String, Object>> markets = fetchAndCacheMarketsByMarketIds(marketIds, now);
+    Set<String> foundIds = new HashSet<>();
     int refreshed = 0;
     for (Map<String, Object> market : markets) {
       String marketId = marketId(market);
       if (marketId == null) {
         continue;
       }
+      foundIds.add(marketId);
       openSearchWriter.enrichMarket(marketId, now, market);
       refreshed++;
     }
-    log.info("Refreshed {} BetDEX markets from REST API requested={}", refreshed, marketIds.size());
+    int deletedMissing = 0;
+    for (String marketId : marketIds) {
+      if (!foundIds.contains(marketId)) {
+        openSearchWriter.deleteMarket(marketId);
+        deletedMissing++;
+      }
+    }
+    log.info("Refreshed {} BetDEX markets from REST API requested={} deletedMissing={}", refreshed, marketIds.size(), deletedMissing);
     return refreshed;
   }
 

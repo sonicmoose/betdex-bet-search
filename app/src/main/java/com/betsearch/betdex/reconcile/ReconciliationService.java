@@ -58,6 +58,7 @@ public class ReconciliationService {
       log.info("BetDEX reconciliation found no open markets to refresh");
       return;
     }
+    log.info("BetDEX reconciliation selected {} open markets to refresh", marketIds.size());
 
     int refreshed = 0;
     for (List<String> batch : batches(marketIds, batchSize)) {
