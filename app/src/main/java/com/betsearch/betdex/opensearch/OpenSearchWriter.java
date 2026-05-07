@@ -139,7 +139,12 @@ public class OpenSearchWriter {
       return currentDocument(marketId, receivedAt, payload);
     }
     Map<String, Object> document = currentDocument(marketId, receivedAt, payload);
-    upsert(properties.marketsCurrentIndex(), marketId, document);
+    if (clearsPrices(payload)) {
+      clearPrices(document);
+      mergeCurrentMarket(marketId, document, true);
+    } else {
+      upsert(properties.marketsCurrentIndex(), marketId, document);
+    }
     return document;
   }
 
@@ -152,7 +157,12 @@ public class OpenSearchWriter {
       deleteMarket(marketId);
       return patch;
     }
-    upsert(properties.marketsCurrentIndex(), marketId, patch);
+    if (clearsPrices(payload)) {
+      clearPrices(patch);
+      mergeCurrentMarket(marketId, patch, true);
+    } else {
+      mergeCurrentMarket(marketId, patch, false);
+    }
     return patch;
   }
 
@@ -166,6 +176,10 @@ public class OpenSearchWriter {
     }
 
     Map<String, Object> document = currentDocument(marketId, receivedAt, enrichment);
+    boolean clearPrices = clearsPrices(enrichment);
+    if (clearPrices) {
+      clearPrices(document);
+    }
     Map<String, Object> payload = Map.of(
         "script", Map.of(
             "lang", "painless",
@@ -180,6 +194,12 @@ public class OpenSearchWriter {
                 }
                 for (entry in params.patch.raw.entrySet()) {
                   ctx._source.raw[entry.getKey()] = entry.getValue();
+                }
+                if (params.clearPrices) {
+                  ctx._source.latestPrices = [];
+                  ctx._source.liquidity = 0;
+                  ctx._source.raw.marketOutcomes = [];
+                  ctx._source.raw.liquidity = 0;
                 }
                 if (params.outcomeNames != null) {
                   if (ctx._source.latestPrices != null) {
@@ -202,7 +222,7 @@ public class OpenSearchWriter {
                   }
                 }
                 """,
-            "params", scriptParams(document, enrichment)),
+            "params", scriptParams(document, enrichment, clearPrices)),
         "upsert", document);
     post(updatePath(properties.marketsCurrentIndex(), marketId), payload);
   }
@@ -376,6 +396,51 @@ public class OpenSearchWriter {
     return status != null && !"Open".equalsIgnoreCase(status.toString());
   }
 
+  private boolean clearsPrices(Map<String, Object> payload) {
+    Object inPlayStatus = payload == null ? null : payload.get("inPlayStatus");
+    return inPlayStatus != null && "InPlay".equalsIgnoreCase(inPlayStatus.toString());
+  }
+
+  private void clearPrices(Map<String, Object> document) {
+    document.put("latestPrices", List.of());
+    document.put("liquidity", BigDecimal.ZERO);
+    Object rawValue = document.get("raw");
+    if (rawValue instanceof Map<?, ?> rawMap) {
+      @SuppressWarnings("unchecked")
+      Map<String, Object> raw = (Map<String, Object>) rawMap;
+      raw.put("marketOutcomes", List.of());
+      raw.put("liquidity", BigDecimal.ZERO);
+    }
+  }
+
+  private void mergeCurrentMarket(String marketId, Map<String, Object> document, boolean clearPrices) {
+    Map<String, Object> payload = Map.of(
+        "script", Map.of(
+            "lang", "painless",
+            "source", """
+                for (entry in params.patch.entrySet()) {
+                  if (entry.getKey() != 'raw') {
+                    ctx._source[entry.getKey()] = entry.getValue();
+                  }
+                }
+                if (ctx._source.raw == null) {
+                  ctx._source.raw = [:];
+                }
+                for (entry in params.patch.raw.entrySet()) {
+                  ctx._source.raw[entry.getKey()] = entry.getValue();
+                }
+                if (params.clearPrices) {
+                  ctx._source.latestPrices = [];
+                  ctx._source.liquidity = 0;
+                  ctx._source.raw.marketOutcomes = [];
+                  ctx._source.raw.liquidity = 0;
+                }
+                """,
+            "params", scriptParams(document, Map.of(), clearPrices)),
+        "upsert", document);
+    post(updatePath(properties.marketsCurrentIndex(), marketId), payload);
+  }
+
   private void applyTextEnrichment(Map<String, Object> document, Map<String, Object> enrichment) {
     if (enrichment == null || enrichment.isEmpty()) {
       return;
@@ -516,8 +581,13 @@ public class OpenSearchWriter {
   }
 
   private Map<String, Object> scriptParams(Map<String, Object> patch, Map<String, Object> enrichment) {
+    return scriptParams(patch, enrichment, false);
+  }
+
+  private Map<String, Object> scriptParams(Map<String, Object> patch, Map<String, Object> enrichment, boolean clearPrices) {
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("patch", patch);
+    params.put("clearPrices", clearPrices);
     Object outcomeNames = enrichment == null ? null : enrichment.get("outcomeNames");
     if (outcomeNames != null) {
       params.put("outcomeNames", outcomeNames);
