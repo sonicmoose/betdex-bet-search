@@ -353,7 +353,14 @@ public class OpenSearchWriter {
                 """,
             "params", scriptParams(document, enrichment)),
         "upsert", document);
-    post(updatePath(properties.marketsCurrentIndex(), first.marketId()), payload);
+    String response = postForResponse(updatePath(properties.marketsCurrentIndex(), first.marketId()), payload);
+    log.info(
+        "Updated OpenSearch market prices marketId={} updateType={} priceCount={} firstPrice={} result={}",
+        first.marketId(),
+        first.updateType(),
+        prices.size(),
+        firstPriceSummary(prices),
+        updateResult(response));
     return document;
   }
 
@@ -639,6 +646,29 @@ public class OpenSearchWriter {
     return "/" + index + "/_update/" + urlEncode(id) + "?retry_on_conflict=10";
   }
 
+  private String firstPriceSummary(List<PriceUpdate> prices) {
+    if (prices.isEmpty()) {
+      return null;
+    }
+    PriceUpdate price = prices.getFirst();
+    return "outcomeId=" + price.outcomeId()
+        + ",side=" + price.side()
+        + ",price=" + price.price()
+        + ",liquidity=" + price.liquidity()
+        + ",validAt=" + price.validAt();
+  }
+
+  private String updateResult(String response) {
+    try {
+      JsonNode body = objectMapper.readTree(response);
+      return "result=" + body.path("result").asText()
+          + ",seqNo=" + body.path("_seq_no").asText()
+          + ",shards=" + body.path("_shards").toString();
+    } catch (JsonProcessingException e) {
+      return response;
+    }
+  }
+
   private void post(String path, Map<String, Object> document) {
     if (properties.endpoint() == null || properties.endpoint().isBlank()) {
       if (disabledWarningLogged.compareAndSet(false, true)) {
@@ -690,16 +720,23 @@ public class OpenSearchWriter {
 
   private HttpRequest signedRequest(String method, String path, byte[] body) {
     URI endpoint = URI.create(properties.endpoint());
+    URI requestUri = endpoint.resolve(path);
     ContentStreamProvider content = () -> new ByteArrayInputStream(body);
-    SdkHttpFullRequest request = SdkHttpFullRequest.builder()
+    SdkHttpFullRequest.Builder requestBuilder = SdkHttpFullRequest.builder()
         .method(SdkHttpMethod.fromValue(method))
         .protocol(endpoint.getScheme())
         .host(endpoint.getHost())
         .port(endpoint.getPort())
-        .encodedPath(path)
+        .encodedPath(requestUri.getRawPath())
         .putHeader("Content-Type", "application/json")
-        .contentStreamProvider(content)
-        .build();
+        .contentStreamProvider(content);
+    if (requestUri.getRawQuery() != null && !requestUri.getRawQuery().isBlank()) {
+      for (String pair : requestUri.getRawQuery().split("&")) {
+        String[] parts = pair.split("=", 2);
+        requestBuilder.appendRawQueryParameter(parts[0], parts.length > 1 ? parts[1] : null);
+      }
+    }
+    SdkHttpFullRequest request = requestBuilder.build();
 
     SdkHttpFullRequest signed = signer.sign(request, Aws4SignerParams.builder()
         .awsCredentials(credentialsProvider.resolveCredentials())
@@ -707,7 +744,7 @@ public class OpenSearchWriter {
         .signingRegion(region)
         .build());
 
-    HttpRequest.Builder builder = HttpRequest.newBuilder(endpoint.resolve(path))
+    HttpRequest.Builder builder = HttpRequest.newBuilder(requestUri)
         .method(method, HttpRequest.BodyPublishers.ofByteArray(body));
     signed.headers().forEach((name, values) -> {
       if (!"host".equalsIgnoreCase(name)) {
