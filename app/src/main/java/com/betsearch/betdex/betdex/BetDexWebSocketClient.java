@@ -211,12 +211,82 @@ public class BetDexWebSocketClient implements ApplicationRunner {
   private void offerDeduped(String message) {
     if (!deduper.accept(fingerprint(message))) {
       duplicateCounter.increment();
+      logDroppedMessage("Dropped duplicate BetDEX stream message", message);
       return;
     }
 
     if (!queue.offer(message)) {
-      log.warn("Dropped BetDEX stream message because inbound queue is full");
+      logDroppedMessage("Dropped BetDEX stream message because inbound queue is full", message);
     }
+  }
+
+  private void logDroppedMessage(String reason, String message) {
+    if (!ingestProperties.messageLoggingEnabled()) {
+      log.warn(reason);
+      return;
+    }
+    try {
+      JsonNode node = objectMapper.readTree(message);
+      JsonNode payload = messageNode(node);
+      log.warn(
+          "{} type={} marketId={} eventId={} updateType={} priceCount={} firstPrice={}",
+          reason,
+          firstText(node, payload, "messageType", "type"),
+          firstText(node, payload, "marketId", "id"),
+          firstText(node, payload, "eventId"),
+          firstText(node, payload, "updateType"),
+          priceCount(payload),
+          firstPriceSummary(payload));
+    } catch (JsonProcessingException e) {
+      log.warn(reason);
+    }
+  }
+
+  private JsonNode messageNode(JsonNode root) {
+    for (String field : List.of("data", "payload", "message")) {
+      JsonNode candidate = root.get(field);
+      if (candidate != null && candidate.isObject()) {
+        return candidate;
+      }
+    }
+    return root;
+  }
+
+  private int priceCount(JsonNode payload) {
+    JsonNode prices = payload.get("prices");
+    return prices != null && prices.isArray() ? prices.size() : 0;
+  }
+
+  private String firstPriceSummary(JsonNode payload) {
+    JsonNode prices = payload.get("prices");
+    if (prices == null || !prices.isArray() || prices.isEmpty()) {
+      return null;
+    }
+    JsonNode firstPrice = prices.get(0);
+    return "outcomeId=" + text(firstPrice, "outcomeId")
+        + ",side=" + text(firstPrice, "side")
+        + ",price=" + text(firstPrice, "price")
+        + ",liquidity=" + text(firstPrice, "liquidity")
+        + ",change=" + text(firstPrice, "change");
+  }
+
+  private String firstText(JsonNode root, JsonNode message, String... fields) {
+    for (String field : fields) {
+      String value = text(root, field);
+      if (value != null) {
+        return value;
+      }
+      value = text(message, field);
+      if (value != null) {
+        return value;
+      }
+    }
+    return null;
+  }
+
+  private String text(JsonNode node, String field) {
+    JsonNode value = node.get(field);
+    return value == null || value.isNull() ? null : value.asText();
   }
 
   private String fingerprint(String message) {

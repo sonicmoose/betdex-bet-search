@@ -8,10 +8,15 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tags;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -24,20 +29,33 @@ public class IngestWorkerService {
   private final MarketMessageHandler handler;
   private final ObjectMapper objectMapper;
   private final ExecutorService dispatcher;
-  private final List<ExecutorService> partitions = new ArrayList<>();
+  private final List<ThreadPoolExecutor> partitions = new ArrayList<>();
 
   public IngestWorkerService(
       InboundMessageQueue queue,
       MarketMessageHandler handler,
       ObjectMapper objectMapper,
-      IngestProperties properties) {
+      IngestProperties properties,
+      MeterRegistry meterRegistry) {
     this.queue = queue;
     this.handler = handler;
     this.objectMapper = objectMapper;
     this.dispatcher = Executors.newSingleThreadExecutor();
     int partitionCount = Math.max(1, properties.workerCount());
     for (int i = 0; i < partitionCount; i++) {
-      partitions.add(Executors.newSingleThreadExecutor());
+      BlockingQueue<Runnable> partitionQueue = new LinkedBlockingQueue<>();
+      ThreadPoolExecutor partition = new ThreadPoolExecutor(
+          1,
+          1,
+          0L,
+          TimeUnit.MILLISECONDS,
+          partitionQueue);
+      partitions.add(partition);
+      meterRegistry.gauge(
+          "betdex.ingest.partition.depth",
+          Tags.of("partition", Integer.toString(i)),
+          partitionQueue,
+          BlockingQueue::size);
     }
   }
 
