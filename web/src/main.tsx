@@ -137,8 +137,9 @@ function App() {
               ...current,
               items: current.items.map((market) => market.marketId === update.marketId ? mergeMarketUpdate(market, update.source!, update.updateType) : market)
             }));
+          } else {
+            refreshVisibleMarket(update.marketId);
           }
-          refreshVisibleMarket(update.marketId);
           return;
         }
         if (!update.source) {

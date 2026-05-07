@@ -457,7 +457,7 @@ function getMarketResponseTemplate(): string {
     "name": $util.toJson($name),
     "eventId": $util.toJson($eventId),
     "status": $util.toJson($raw.status),
-    "raw": $util.toJson($raw)
+    "raw": $util.toJson($src)
   }
 #end`;
 }
