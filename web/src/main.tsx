@@ -132,6 +132,12 @@ function App() {
       visibleMarketIds,
       (update) => {
         if (update.updateType === 'Snapshot' || update.updateType === 'Incremental') {
+          if (update.source) {
+            setSearchResult((current) => ({
+              ...current,
+              items: current.items.map((market) => market.marketId === update.marketId ? mergeMarketUpdate(market, update.source!, update.updateType) : market)
+            }));
+          }
           refreshVisibleMarket(update.marketId);
           return;
         }
@@ -299,13 +305,24 @@ function MarketRow({ market }: { market: Market }) {
 
 function mergeMarketUpdate(current: Market, update: Market, updateType?: string): Market {
   if (updateType === 'Incremental') {
-    const outcomes = mergePricePoints(current.outcomes, update.outcomes);
+    const outcomes = mergePricePoints(current.outcomes, withOutcomeNames(update.outcomes, current.marketOutcomes));
     return {
       ...current,
-      ...update,
       marketOutcomes: update.marketOutcomes.length > 0 ? update.marketOutcomes : current.marketOutcomes,
       outcomes,
-      liquidity: outcomes.reduce((total, outcome) => total + outcome.liquidity, 0)
+      liquidity: outcomes.reduce((total, outcome) => total + outcome.liquidity, 0),
+      raw: { ...current.raw, ...update.raw }
+    };
+  }
+
+  if (updateType === 'Snapshot') {
+    const outcomes = withOutcomeNames(update.outcomes, current.marketOutcomes);
+    return {
+      ...current,
+      marketOutcomes: update.marketOutcomes.length > 0 ? update.marketOutcomes : current.marketOutcomes,
+      outcomes,
+      liquidity: outcomes.reduce((total, outcome) => total + outcome.liquidity, 0),
+      raw: { ...current.raw, ...update.raw }
     };
   }
 
@@ -327,6 +344,14 @@ function mergePricePoints(current: PricePoint[], updates: PricePoint[]) {
     }
   }
   return Array.from(byKey.values());
+}
+
+function withOutcomeNames(prices: PricePoint[], marketOutcomes: Market['marketOutcomes']) {
+  const names = new Map(marketOutcomes.map((outcome) => [outcome.outcomeId, outcome.outcomeName]));
+  return prices.map((price) => ({
+    ...price,
+    outcomeName: names.get(price.outcomeId) ?? price.outcomeName
+  }));
 }
 
 function priceKey(price: PricePoint) {

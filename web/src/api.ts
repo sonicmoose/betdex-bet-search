@@ -307,6 +307,15 @@ function base64Url(value: string) {
 
 function normalizeSource(source: Record<string, unknown>): Record<string, unknown> {
   const raw = source.raw;
+  const prices = source.prices;
+  if (Array.isArray(prices)) {
+    return {
+      ...source,
+      latestPrices: prices,
+      marketOutcomes: prices,
+      raw: source
+    };
+  }
   if (!isRecord(raw)) {
     return source;
   }

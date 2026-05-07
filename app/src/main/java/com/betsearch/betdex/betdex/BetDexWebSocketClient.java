@@ -1,9 +1,11 @@
 package com.betsearch.betdex.betdex;
 
+import com.betsearch.betdex.appsync.AppSyncMarketUpdatePublisher;
 import com.betsearch.betdex.config.BetDexProperties;
 import com.betsearch.betdex.config.IngestProperties;
 import com.betsearch.betdex.ingest.InboundMessageQueue;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.Counter;
@@ -16,6 +18,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.List;
@@ -37,6 +40,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class BetDexWebSocketClient implements ApplicationRunner {
   private static final Logger log = LoggerFactory.getLogger(BetDexWebSocketClient.class);
+  private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
+  };
   private static final List<String> SUBSCRIPTION_TYPES = List.of(
       "EventUpdate",
       "MarketUpdate",
@@ -47,6 +52,7 @@ public class BetDexWebSocketClient implements ApplicationRunner {
   private final IngestProperties ingestProperties;
   private final BetDexSessionClient sessionClient;
   private final InboundMessageQueue queue;
+  private final AppSyncMarketUpdatePublisher marketUpdatePublisher;
   private final ObjectMapper objectMapper;
   private final Counter reconnectCounter;
   private final Counter rotationCounter;
@@ -64,12 +70,14 @@ public class BetDexWebSocketClient implements ApplicationRunner {
       IngestProperties ingestProperties,
       BetDexSessionClient sessionClient,
       InboundMessageQueue queue,
+      AppSyncMarketUpdatePublisher marketUpdatePublisher,
       ObjectMapper objectMapper,
       MeterRegistry meterRegistry) {
     this.properties = properties;
     this.ingestProperties = ingestProperties;
     this.sessionClient = sessionClient;
     this.queue = queue;
+    this.marketUpdatePublisher = marketUpdatePublisher;
     this.objectMapper = objectMapper;
     this.reconnectCounter = meterRegistry.counter("betdex.websocket.reconnects");
     this.rotationCounter = meterRegistry.counter("betdex.websocket.rotations");
@@ -208,15 +216,40 @@ public class BetDexWebSocketClient implements ApplicationRunner {
     }
   }
 
-  private void offerDeduped(String message) {
+  private boolean offerDeduped(String message) {
     if (!deduper.accept(fingerprint(message))) {
       duplicateCounter.increment();
       logDroppedMessage("Dropped duplicate BetDEX stream message", message);
-      return;
+      return false;
     }
 
     if (!queue.offer(message)) {
       logDroppedMessage("Dropped BetDEX stream message because inbound queue is full", message);
+    }
+    return true;
+  }
+
+  private void publishPriceUpdateInvalidation(String message) {
+    try {
+      JsonNode root = objectMapper.readTree(message);
+      JsonNode payload = messageNode(root);
+      String type = firstText(root, payload, "messageType", "type");
+      if (!"MarketPriceUpdate".equals(type) && !payload.has("prices")) {
+        return;
+      }
+      String marketId = firstText(root, payload, "marketId", "id");
+      if (marketId == null) {
+        return;
+      }
+      Map<String, Object> source = objectMapper.convertValue(payload, MAP_TYPE);
+      marketUpdatePublisher.publishMarketUpdated(
+          marketId,
+          firstText(root, payload, "eventId"),
+          firstText(root, payload, "updateType"),
+          Instant.now(),
+          source);
+    } catch (RuntimeException | JsonProcessingException e) {
+      log.warn("Failed to publish immediate AppSync price invalidation", e);
     }
   }
 
@@ -371,7 +404,9 @@ public class BetDexWebSocketClient implements ApplicationRunner {
           log.info("BetDEX replacement WebSocket received first data message and is now active connection={}", id);
         }
         logReceivedMessage(message, kind);
-        offerDeduped(message);
+        if (offerDeduped(message)) {
+          publishPriceUpdateInvalidation(message);
+        }
       }
       webSocket.request(1);
       return null;
