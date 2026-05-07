@@ -33,6 +33,18 @@ const marketUpdatedSubscription = `
   }
 `;
 
+const getMarketQuery = `
+  query GetMarket($marketId: ID!) {
+    getMarket(marketId: $marketId) {
+      marketId
+      name
+      eventId
+      status
+      raw
+    }
+  }
+`;
+
 export async function searchMarkets(input: MarketSearchInput, signal?: AbortSignal): Promise<MarketSearchResult> {
   if (!isLiveDataSource) {
     return searchMockMarkets(input);
@@ -73,6 +85,41 @@ export async function searchMarkets(input: MarketSearchInput, signal?: AbortSign
     page: input.page,
     pageSize: input.pageSize
   };
+}
+
+export async function getMarket(marketId: string, signal?: AbortSignal): Promise<Market | null> {
+  if (!isLiveDataSource) {
+    return mockMarkets.find((market) => market.marketId === marketId) ?? null;
+  }
+
+  const response = await fetch(appsyncUrl!, {
+    method: 'POST',
+    signal,
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': appsyncApiKey!
+    },
+    body: JSON.stringify({
+      query: getMarketQuery,
+      variables: { marketId }
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`AppSync getMarket failed with HTTP ${response.status}`);
+  }
+
+  const payload = await response.json() as GraphqlResponse;
+  if (payload.errors?.length) {
+    throw new Error(payload.errors.map((error) => error.message).join('; '));
+  }
+
+  const market = payload.data?.getMarket;
+  if (!market) {
+    return null;
+  }
+
+  return toMarket(market.marketId ?? marketId, parseAwsJson(market.raw));
 }
 
 export function subscribeToMarketUpdates(
@@ -394,6 +441,13 @@ interface GraphqlResponse {
         source: unknown;
       }>;
     };
+    getMarket?: {
+      marketId: string;
+      name?: string;
+      eventId?: string;
+      status?: string;
+      raw?: unknown;
+    } | null;
   };
   errors?: Array<{
     message: string;

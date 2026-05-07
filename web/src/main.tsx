@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { Search } from 'lucide-react';
-import { dataSourceLabel, initialMarkets, searchMarkets, subscribeToMarketUpdates } from './api';
+import { dataSourceLabel, getMarket, initialMarkets, searchMarkets, subscribeToMarketUpdates } from './api';
 import type { InPlayFilter, Market, MarketSearchInput, MarketSearchResult, MarketSort, PricePoint } from './types';
 import './styles.css';
 
@@ -53,6 +53,45 @@ function App() {
     [searchResult.items]
   );
   const visibleMarketIdsKey = visibleMarketIds.join('|');
+  const refreshTimersRef = React.useRef(new Map<string, number>());
+  const refreshControllersRef = React.useRef(new Map<string, AbortController>());
+
+  const refreshVisibleMarket = React.useCallback((marketId: string) => {
+    if (!visibleMarketIds.includes(marketId)) {
+      return;
+    }
+
+    const existingTimer = refreshTimersRef.current.get(marketId);
+    if (existingTimer !== undefined) {
+      window.clearTimeout(existingTimer);
+    }
+
+    const timer = window.setTimeout(() => {
+      refreshTimersRef.current.delete(marketId);
+      const existingController = refreshControllersRef.current.get(marketId);
+      existingController?.abort();
+
+      const controller = new AbortController();
+      refreshControllersRef.current.set(marketId, controller);
+      getMarket(marketId, controller.signal).then((market) => {
+        refreshControllersRef.current.delete(marketId);
+        setSearchResult((current) => ({
+          ...current,
+          items: market && market.status === 'Open'
+            ? current.items.map((item) => item.marketId === marketId ? market : item)
+            : current.items.filter((item) => item.marketId !== marketId),
+          total: market && market.status === 'Open' ? current.total : Math.max(0, current.total - 1)
+        }));
+      }).catch((reason: unknown) => {
+        if (reason instanceof DOMException && reason.name === 'AbortError') {
+          return;
+        }
+        console.warn(reason);
+      });
+    }, 250);
+
+    refreshTimersRef.current.set(marketId, timer);
+  }, [visibleMarketIdsKey]);
 
   React.useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -92,6 +131,10 @@ function App() {
     return subscribeToMarketUpdates(
       visibleMarketIds,
       (update) => {
+        if (update.updateType === 'Snapshot' || update.updateType === 'Incremental') {
+          refreshVisibleMarket(update.marketId);
+          return;
+        }
         if (!update.source) {
           return;
         }
@@ -107,6 +150,15 @@ function App() {
         console.warn(reason);
       });
   }, [visibleMarketIdsKey]);
+
+  React.useEffect(() => {
+    return () => {
+      refreshTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+      refreshTimersRef.current.clear();
+      refreshControllersRef.current.forEach((controller) => controller.abort());
+      refreshControllersRef.current.clear();
+    };
+  }, []);
 
   function updateFilters(next: Partial<MarketSearchInput>) {
     setFilters((current) => ({ ...current, ...next, page: 1 }));
