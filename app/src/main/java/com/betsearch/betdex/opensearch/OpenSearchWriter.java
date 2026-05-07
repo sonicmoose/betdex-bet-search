@@ -304,7 +304,13 @@ public class OpenSearchWriter {
                   for (patchPrice in params.patch.latestPrices) {
                     for (int i = ctx._source.latestPrices.size() - 1; i >= 0; i--) {
                       def current = ctx._source.latestPrices[i];
-                      if (current.outcomeId == patchPrice.outcomeId && current.side == patchPrice.side && current.price == patchPrice.price) {
+                      boolean sameOutcome = current.outcomeId != null && patchPrice.outcomeId != null
+                          && current.outcomeId.toString().equals(patchPrice.outcomeId.toString());
+                      boolean sameSide = current.side != null && patchPrice.side != null
+                          && current.side.toString().equals(patchPrice.side.toString());
+                      boolean samePrice = current.price != null && patchPrice.price != null
+                          && Double.parseDouble(current.price.toString()) == Double.parseDouble(patchPrice.price.toString());
+                      if (sameOutcome && sameSide && samePrice) {
                         ctx._source.latestPrices.remove(i);
                       }
                     }

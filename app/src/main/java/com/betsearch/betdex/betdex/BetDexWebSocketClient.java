@@ -370,7 +370,7 @@ public class BetDexWebSocketClient implements ApplicationRunner {
         JsonNode node = objectMapper.readTree(message);
         JsonNode payload = messageNode(node);
         log.info(
-            "BetDEX WebSocket message received connection={} replacement={} kind={} type={} subscriptionType={} marketId={} eventId={} updateType={}",
+            "BetDEX WebSocket message received connection={} replacement={} kind={} type={} subscriptionType={} marketId={} eventId={} updateType={} priceCount={} firstPrice={}",
             id,
             replacement,
             kind,
@@ -378,7 +378,9 @@ public class BetDexWebSocketClient implements ApplicationRunner {
             firstText(node, payload, "subscriptionType"),
             firstText(node, payload, "marketId", "id"),
             firstText(node, payload, "eventId"),
-            firstText(node, payload, "updateType"));
+            firstText(node, payload, "updateType"),
+            priceCount(payload),
+            firstPriceSummary(payload));
       } catch (JsonProcessingException e) {
         log.info("BetDEX WebSocket non-JSON message received connection={} replacement={} kind={}", id, replacement, kind);
       }
@@ -392,6 +394,24 @@ public class BetDexWebSocketClient implements ApplicationRunner {
         }
       }
       return root;
+    }
+
+    private int priceCount(JsonNode payload) {
+      JsonNode prices = payload.get("prices");
+      return prices != null && prices.isArray() ? prices.size() : 0;
+    }
+
+    private String firstPriceSummary(JsonNode payload) {
+      JsonNode prices = payload.get("prices");
+      if (prices == null || !prices.isArray() || prices.isEmpty()) {
+        return null;
+      }
+      JsonNode firstPrice = prices.get(0);
+      return "outcomeId=" + text(firstPrice, "outcomeId")
+          + ",side=" + text(firstPrice, "side")
+          + ",price=" + text(firstPrice, "price")
+          + ",liquidity=" + text(firstPrice, "liquidity")
+          + ",change=" + text(firstPrice, "change");
     }
 
     private String firstText(JsonNode root, JsonNode message, String... fields) {
