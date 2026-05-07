@@ -204,7 +204,7 @@ public class OpenSearchWriter {
                 """,
             "params", scriptParams(document, enrichment)),
         "upsert", document);
-    post("/" + properties.marketsCurrentIndex() + "/_update/" + urlEncode(marketId), payload);
+    post(updatePath(properties.marketsCurrentIndex(), marketId), payload);
   }
 
   public void upsertEvent(String eventId, Instant receivedAt, Map<String, Object> payload) {
@@ -267,7 +267,7 @@ public class OpenSearchWriter {
                 """,
             "params", scriptParams(document, enrichment)),
         "upsert", document);
-    post("/" + properties.marketsCurrentIndex() + "/_update/" + urlEncode(marketId), payload);
+    post(updatePath(properties.marketsCurrentIndex(), marketId), payload);
     return document;
   }
 
@@ -353,7 +353,7 @@ public class OpenSearchWriter {
                 """,
             "params", scriptParams(document, enrichment)),
         "upsert", document);
-    post("/" + properties.marketsCurrentIndex() + "/_update/" + urlEncode(first.marketId()), payload);
+    post(updatePath(properties.marketsCurrentIndex(), first.marketId()), payload);
     return document;
   }
 
@@ -632,7 +632,11 @@ public class OpenSearchWriter {
 
   private void upsert(String index, String id, Map<String, Object> document) {
     Map<String, Object> payload = Map.of("doc", document, "doc_as_upsert", true);
-    post("/" + index + "/_update/" + urlEncode(id), payload);
+    post(updatePath(index, id), payload);
+  }
+
+  private String updatePath(String index, String id) {
+    return "/" + index + "/_update/" + urlEncode(id) + "?retry_on_conflict=10";
   }
 
   private void post(String path, Map<String, Object> document) {
