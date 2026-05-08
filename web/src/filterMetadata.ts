@@ -1,7 +1,6 @@
 export const sportGroups = [
   { value: 'BASEBALL', label: 'Baseball', subCategoryIds: ['BASEBALL', 'MLB'] },
   { value: 'BBALL', label: 'Basketball', subCategoryIds: ['BBALL'] },
-  { value: 'CRICKET', label: 'Cricket', subCategoryIds: ['CRICKET'] },
   { value: 'FOOTBALL', label: 'Football', subCategoryIds: ['FOOTBALL'] },
   { value: 'ICEHKY', label: 'Ice Hockey', subCategoryIds: ['ICEHKY'] },
   { value: 'TENNIS', label: 'Tennis', subCategoryIds: ['TENNIS'] }

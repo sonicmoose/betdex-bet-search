@@ -28,7 +28,7 @@ const defaultSportOptions = sportGroups.map((group) => ({ value: group.value, la
 const defaultLeagueOptions = Object.entries(leagueLabels).map(([value, label]) => ({ value, label }));
 const defaultMarketTypeOptions = marketTypeGroups.map((group) => ({ value: group.value, label: group.label }));
 const sportIds = new Set(sportGroups.flatMap((group) => group.subCategoryIds));
-const nonLeagueIds = new Set(['SPORTS', 'FOOTBALL', 'CRICKET', 'ICEHKY']);
+const nonLeagueIds = new Set(['SPORTS', 'FOOTBALL', 'ICEHKY']);
 
 function App() {
   const [textValue, setTextValue] = React.useState('');
