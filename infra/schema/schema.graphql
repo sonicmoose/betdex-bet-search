@@ -27,6 +27,8 @@ input MarketSearchInput {
   categoryIds: [ID!]
   eventGroupId: ID
   eventGroupIds: [ID!]
+  marketTypeId: ID
+  marketTypeIds: [ID!]
   subCategoryId: ID
   subCategoryIds: [ID!]
   status: String

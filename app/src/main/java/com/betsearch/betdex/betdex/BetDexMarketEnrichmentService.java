@@ -536,12 +536,24 @@ public class BetDexMarketEnrichmentService {
         List.of("event", "id")));
   }
 
+  private String marketTypeId(Map<String, Object> market) {
+    String direct = firstString(market, List.of("marketTypeId", "market_type_id", "typeId", "type_id"));
+    if (direct != null) {
+      return direct;
+    }
+    return firstNestedString(market, List.of(
+        List.of("marketType", "id"),
+        List.of("market_type", "id"),
+        List.of("type", "id")));
+  }
+
   private Map<String, Object> normalizeMarket(Map<String, Object> market) {
     Map<String, Object> normalized = new LinkedHashMap<>(market);
     putIfPresent(normalized, "marketId", marketId(market));
     putIfPresent(normalized, "eventId", eventId(market));
     putIfPresent(normalized, "eventGroupId", firstString(market, List.of("eventGroupId", "event_group_id", "leagueId", "league_id")));
     putIfPresent(normalized, "eventGroupName", firstString(market, List.of("eventGroupName", "event_group_name", "leagueName", "league_name")));
+    putIfPresent(normalized, "marketTypeId", marketTypeId(market));
     putIfPresent(normalized, "categoryId", firstString(market, List.of("categoryId", "category_id")));
     putIfPresent(normalized, "categoryName", firstString(market, List.of("categoryName", "category_name")));
     putIfPresent(normalized, "subCategoryId", firstString(market, List.of("subCategoryId", "sub_category_id", "sportId", "sport_id")));

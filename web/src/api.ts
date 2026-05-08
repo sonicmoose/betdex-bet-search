@@ -1,4 +1,5 @@
 import { markets as mockMarkets, searchMarkets as searchMockMarkets } from './mockApi';
+import { expandMarketTypeGroups } from './filterMetadata';
 import type { Market, MarketOutcome, MarketSearchInput, MarketSearchResult, MarketSort, MarketStatus, MarketUpdate, PricePoint } from './types';
 
 const appsyncUrl = import.meta.env.VITE_APPSYNC_GRAPHQL_URL as string | undefined;
@@ -195,6 +196,7 @@ function toGraphqlInput(input: MarketSearchInput) {
     subCategoryIds: input.subCategoryIds.length ? input.subCategoryIds : undefined,
     eventGroupId: input.eventGroupIds.length === 1 ? input.eventGroupIds[0] : undefined,
     eventGroupIds: input.eventGroupIds.length > 1 ? input.eventGroupIds : undefined,
+    marketTypeIds: input.marketTypeIds.length ? expandMarketTypeGroups(input.marketTypeIds) : undefined,
     status: 'Open',
     hasLiquidity: input.hasLiquidity,
     inPlay: input.inPlay.length ? input.inPlay.map((value) => value === 'Yes') : undefined,
@@ -236,6 +238,7 @@ function toMarket(hitId: string, raw: Record<string, unknown>): Market {
     eventId: text(source, 'eventId') ?? text(source, 'event_id') ?? '',
     eventGroupId: text(source, 'eventGroupId') ?? text(source, 'eventGroup_id') ?? '',
     eventName,
+    marketTypeId: text(source, 'marketTypeId') ?? text(source, 'market_type_id') ?? '',
     categoryId: text(source, 'categoryId') ?? text(source, 'category_id') ?? '',
     categoryName: text(source, 'categoryName') ?? text(source, 'category_name') ?? text(source, 'categoryId') ?? text(source, 'category_id') ?? 'Unknown sport',
     subCategoryId: text(source, 'subCategoryId') ?? text(source, 'subCategory_id') ?? '',

@@ -450,6 +450,7 @@ public class OpenSearchWriter {
         "marketId",
         "eventId",
         "eventGroupId",
+        "marketTypeId",
         "categoryId",
         "categoryName",
         "subCategoryId",
@@ -520,6 +521,7 @@ public class OpenSearchWriter {
     document.put("marketId", firstValue(payload, "marketId", "id"));
     document.put("eventId", payload.get("eventId"));
     document.put("eventGroupId", payload.get("eventGroupId"));
+    document.put("marketTypeId", payload.get("marketTypeId"));
     document.put("categoryId", payload.get("categoryId"));
     document.put("subCategoryId", payload.get("subCategoryId"));
     document.put("name", payload.get("name"));
@@ -555,6 +557,8 @@ public class OpenSearchWriter {
         "eventId",
         "eventGroupId",
         "eventGroupName",
+        "marketTypeId",
+        "market_type_id",
         "categoryId",
         "categoryName",
         "subCategoryId",

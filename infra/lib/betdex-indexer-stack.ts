@@ -327,6 +327,10 @@ function searchMarketsRequestTemplate(): string {
   #set($hasQuery = true)
   $util.qr($filter.add({"bool":{"should":[{"term":{"eventGroupId.keyword":$input.eventGroupId}},{"term":{"raw.eventGroupId.keyword":$input.eventGroupId}}],"minimum_should_match":1}}))
 #end
+#if(!$util.isNull($input.marketTypeId))
+  #set($hasQuery = true)
+  $util.qr($filter.add({"bool":{"should":[{"term":{"marketTypeId.keyword":$input.marketTypeId}},{"term":{"raw.marketTypeId.keyword":$input.marketTypeId}},{"term":{"raw.market_type_id.keyword":$input.marketTypeId}}],"minimum_should_match":1}}))
+#end
 #if(!$util.isNull($input.status))
   #set($hasQuery = true)
   $util.qr($filter.add({"term":{"raw.status.keyword":$input.status}}))
@@ -342,6 +346,10 @@ function searchMarketsRequestTemplate(): string {
 #if(!$util.isNull($input.eventGroupIds) && $input.eventGroupIds.size() > 0)
   #set($hasQuery = true)
   $util.qr($filter.add({"bool":{"should":[{"terms":{"eventGroupId.keyword":$input.eventGroupIds}},{"terms":{"raw.eventGroupId.keyword":$input.eventGroupIds}}],"minimum_should_match":1}}))
+#end
+#if(!$util.isNull($input.marketTypeIds) && $input.marketTypeIds.size() > 0)
+  #set($hasQuery = true)
+  $util.qr($filter.add({"bool":{"should":[{"terms":{"marketTypeId.keyword":$input.marketTypeIds}},{"terms":{"raw.marketTypeId.keyword":$input.marketTypeIds}},{"terms":{"raw.market_type_id.keyword":$input.marketTypeIds}}],"minimum_should_match":1}}))
 #end
 #if(!$util.isNull($input.statuses) && $input.statuses.size() > 0)
   #set($hasQuery = true)

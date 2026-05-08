@@ -1,4 +1,5 @@
 import type { Market, MarketOutcome, MarketSearchInput, MarketSearchResult, MarketStatus, PricePoint } from './types';
+import { expandMarketTypeGroups } from './filterMetadata';
 
 const now = Date.now();
 
@@ -58,8 +59,10 @@ export async function searchMarkets(input: MarketSearchInput): Promise<MarketSea
     const inPlayMatch = input.inPlay.length === 0 || input.inPlay.includes(market.inPlay ? 'Yes' : 'No');
     const sportMatch = input.subCategoryIds.length === 0 || input.subCategoryIds.includes(market.subCategoryId);
     const leagueMatch = input.eventGroupIds.length === 0 || input.eventGroupIds.includes(market.eventGroupId);
+    const marketTypeIds = expandMarketTypeGroups(input.marketTypeIds);
+    const marketTypeMatch = marketTypeIds.length === 0 || marketTypeIds.includes(market.marketTypeId);
     const liquidityMatch = !input.hasLiquidity || market.liquidity > 0;
-    return textMatch && statusMatch && inPlayMatch && sportMatch && leagueMatch && liquidityMatch;
+    return textMatch && statusMatch && inPlayMatch && sportMatch && leagueMatch && marketTypeMatch && liquidityMatch;
   });
 
   const sorted = [...filtered].sort((left, right) => {
@@ -92,6 +95,7 @@ function createMarket(seed: MarketSeed, index: number): Market {
   const matched = 18000 + index * 7350 + (index % 5) * 2200;
   const liquidity = 6200 + index * 980 + (index % 4) * 1650;
   const outcomes = createOutcomes(seed, index);
+  const marketTypeId = marketTypeIdForSeed(seed);
 
   return {
     marketId,
@@ -99,6 +103,7 @@ function createMarket(seed: MarketSeed, index: number): Market {
     eventId: `evt-${slug(seed.eventName)}`,
     eventGroupId: seed.eventGroupId ?? seed.subCategoryName,
     eventName: seed.eventName,
+    marketTypeId,
     categoryId: seed.categoryId,
     categoryName: seed.categoryName,
     subCategoryId: seed.subCategoryId ?? seed.subCategoryName,
@@ -111,11 +116,30 @@ function createMarket(seed: MarketSeed, index: number): Market {
     marketOutcomes: toMarketOutcomes(outcomes),
     outcomes: outcomes.flatMap(withLayPrice),
     raw: {
-      marketType: slug(seed.marketName).toUpperCase().replace(/-/g, '_'),
+      marketTypeId,
       currencyId: 'USDC',
       inPlayStatus: seed.inPlay ? 'InPlay' : 'PrePlay'
     }
   };
+}
+
+function marketTypeIdForSeed(seed: MarketSeed): string {
+  if (seed.marketName.includes('Total')) {
+    return seed.subCategoryId === 'MLB' ? 'BASEBALL_OVER_UNDER_TOTAL_RUNS' : 'FOOTBALL_OVER_UNDER_TOTAL_GOALS';
+  }
+  if (seed.marketName.includes('Spread') || seed.marketName.includes('Run Line')) {
+    return seed.subCategoryId === 'MLB' ? 'BASEBALL_HANDICAP' : 'FOOTBALL_FULL_TIME_RESULT_HANDICAP';
+  }
+  if (seed.marketName === 'Moneyline') {
+    if (seed.subCategoryId === 'ICEHKY') {
+      return 'ICEHKY_MONEYLINE';
+    }
+    return seed.subCategoryId === 'MLB' ? 'BASEBALL_MONEYLINE' : 'BBALL_MONEYLINE';
+  }
+  if (seed.marketName === 'Both Teams To Score') {
+    return 'FOOTBALL_BOTH_TEAMS_TO_SCORE';
+  }
+  return seed.subCategoryId === 'TENNIS' ? 'TENNIS_WINNER' : 'FOOTBALL_FULL_TIME_RESULT';
 }
 
 function toMarketOutcomes(outcomes: PricePoint[]): MarketOutcome[] {

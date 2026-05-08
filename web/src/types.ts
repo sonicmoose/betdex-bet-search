@@ -7,6 +7,7 @@ export interface MarketSearchInput {
   inPlay: InPlayFilter[];
   subCategoryIds: string[];
   eventGroupIds: string[];
+  marketTypeIds: string[];
   hasLiquidity: boolean;
   sort: MarketSort;
   page: number;
@@ -26,6 +27,7 @@ export interface Market {
   eventId: string;
   eventGroupId: string;
   eventName: string;
+  marketTypeId: string;
   categoryId: string;
   categoryName: string;
   subCategoryId: string;

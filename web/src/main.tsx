@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { Search } from 'lucide-react';
 import { dataSourceLabel, getMarket, initialMarkets, searchMarkets, subscribeToMarketUpdates } from './api';
+import { leagueLabel, leagueLabels, marketTypeGroupFor, marketTypeGroups, marketTypeLabel, sportLabel, sportLabels } from './filterMetadata';
 import type { InPlayFilter, Market, MarketSearchInput, MarketSearchResult, MarketSort, PricePoint } from './types';
 import './styles.css';
 
@@ -23,8 +24,9 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
 
 const betdexBaseUrl = 'https://dev.betdex.com';
 const pageSizes = [10, 20, 50];
-const defaultSportOptions = ['FOOTBALL', 'CRICKET', 'ICEHKY', 'MLB'].map((value) => ({ value, label: value }));
-const defaultLeagueOptions = ['ALGE', 'EFL', 'EPL', 'FIFAWC', 'LALIGA', 'LALIGA2', 'MLB', 'NHL'].map((value) => ({ value, label: value }));
+const defaultSportOptions = Object.entries(sportLabels).map(([value, label]) => ({ value, label }));
+const defaultLeagueOptions = Object.entries(leagueLabels).map(([value, label]) => ({ value, label }));
+const defaultMarketTypeOptions = marketTypeGroups.map((group) => ({ value: group.value, label: group.label }));
 const sportIds = new Set(defaultSportOptions.map((option) => option.value));
 const nonLeagueIds = new Set(['SPORTS', 'FOOTBALL', 'CRICKET', 'ICEHKY']);
 
@@ -35,6 +37,7 @@ function App() {
     inPlay: [],
     subCategoryIds: [],
     eventGroupIds: [],
+    marketTypeIds: [],
     hasLiquidity: true,
     sort: 'Start time',
     page: 1,
@@ -225,6 +228,12 @@ function App() {
             onChange={(eventGroupIds) => updateFilters({ eventGroupIds })}
           />
           <FilterGroup
+            label="Market type"
+            values={filterOptions.marketTypes}
+            selected={filters.marketTypeIds}
+            onChange={(marketTypeIds) => updateFilters({ marketTypeIds })}
+          />
+          <FilterGroup
             label="In-play"
             values={[
               { value: 'Yes', label: 'Live' },
@@ -292,7 +301,7 @@ function MarketRow({ market }: { market: Market }) {
           <h2>{market.eventName}</h2>
           {market.inPlay && <span className="live-pill">Live</span>}
         </div>
-        <p>{market.name} · Sport {market.subCategoryId || 'Unknown'} · League {market.eventGroupId || 'Unknown'}</p>
+        <p>{market.name} · {sportLabel(market.subCategoryId || 'Unknown')} · {leagueLabel(market.eventGroupId || 'Unknown')}</p>
         <div className="market-meta">
           <span>{Number.isNaN(startsAt.getTime()) ? 'Time TBC' : dateFormatter.format(startsAt)}</span>
           <span>Liquidity ${numberFormatter.format(market.liquidity)}</span>
@@ -523,13 +532,21 @@ function deriveFilterOptions(items: Market[]) {
       ...defaultSportOptions,
       ...items
         .filter((market) => sportIds.has(market.subCategoryId))
-        .map((market) => ({ value: market.subCategoryId, label: market.subCategoryId }))
+        .map((market) => ({ value: market.subCategoryId, label: sportLabel(market.subCategoryId) }))
     ]),
     leagues: uniqueOptions([
       ...defaultLeagueOptions,
       ...items
         .filter((market) => isBetdexId(market.eventGroupId) && !nonLeagueIds.has(market.eventGroupId))
-        .map((market) => ({ value: market.eventGroupId, label: market.eventGroupId }))
+        .map((market) => ({ value: market.eventGroupId, label: leagueLabel(market.eventGroupId) }))
+    ]),
+    marketTypes: uniqueOptions([
+      ...defaultMarketTypeOptions,
+      ...items
+        .map((market) => market.marketTypeId)
+        .filter((marketTypeId): marketTypeId is string => Boolean(marketTypeId))
+        .map((marketTypeId) => marketTypeGroupFor(marketTypeId) ?? marketTypeId)
+        .map((value) => ({ value, label: marketTypeLabel(value) }))
     ])
   };
 }
@@ -537,7 +554,8 @@ function deriveFilterOptions(items: Market[]) {
 function mergeFilterOptions(left: FilterOptions, right: FilterOptions): FilterOptions {
   return {
     sports: uniqueOptions([...left.sports, ...right.sports]),
-    leagues: uniqueOptions([...left.leagues, ...right.leagues])
+    leagues: uniqueOptions([...left.leagues, ...right.leagues]),
+    marketTypes: uniqueOptions([...left.marketTypes, ...right.marketTypes])
   };
 }
 
@@ -607,6 +625,7 @@ function bestPricesByOutcome(prices: PricePoint[], marketOutcomes: Market['marke
 interface FilterOptions {
   sports: Array<{ value: string; label: string }>;
   leagues: Array<{ value: string; label: string }>;
+  marketTypes: Array<{ value: string; label: string }>;
 }
 
 interface BestOutcomePrices {
