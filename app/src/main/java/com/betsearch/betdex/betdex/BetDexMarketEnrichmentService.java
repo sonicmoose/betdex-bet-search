@@ -544,6 +544,8 @@ public class BetDexMarketEnrichmentService {
     return firstNestedString(market, List.of(
         List.of("marketType", "id"),
         List.of("market_type", "id"),
+        List.of("marketTypes", "id"),
+        List.of("market_types", "id"),
         List.of("type", "id")));
   }
 
@@ -588,14 +590,28 @@ public class BetDexMarketEnrichmentService {
     for (List<String> path : paths) {
       Object value = source;
       for (String segment : path) {
-        if (!(value instanceof Map<?, ?> map)) {
-          value = null;
+        value = nestedValue(value, segment);
+        if (value == null) {
           break;
         }
-        value = map.get(segment);
       }
       if (value != null && !value.toString().isBlank()) {
         return value.toString();
+      }
+    }
+    return null;
+  }
+
+  private Object nestedValue(Object value, String segment) {
+    if (value instanceof Map<?, ?> map) {
+      return map.get(segment);
+    }
+    if (value instanceof Iterable<?> iterable) {
+      for (Object item : iterable) {
+        Object nested = nestedValue(item, segment);
+        if (nested != null && !nested.toString().isBlank()) {
+          return nested;
+        }
       }
     }
     return null;

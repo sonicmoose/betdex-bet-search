@@ -329,7 +329,7 @@ function searchMarketsRequestTemplate(): string {
 #end
 #if(!$util.isNull($input.marketTypeId))
   #set($hasQuery = true)
-  $util.qr($filter.add({"bool":{"should":[{"term":{"marketTypeId.keyword":$input.marketTypeId}},{"term":{"raw.marketTypeId.keyword":$input.marketTypeId}},{"term":{"raw.market_type_id.keyword":$input.marketTypeId}}],"minimum_should_match":1}}))
+  $util.qr($filter.add({"bool":{"should":[{"term":{"marketTypeId.keyword":$input.marketTypeId}},{"term":{"raw.marketTypeId.keyword":$input.marketTypeId}},{"term":{"raw.market_type_id.keyword":$input.marketTypeId}},{"match_phrase":{"enrichmentSearchText":$input.marketTypeId}},{"match_phrase":{"raw.enrichmentSearchText":$input.marketTypeId}}],"minimum_should_match":1}}))
 #end
 #if(!$util.isNull($input.status))
   #set($hasQuery = true)
@@ -349,7 +349,15 @@ function searchMarketsRequestTemplate(): string {
 #end
 #if(!$util.isNull($input.marketTypeIds) && $input.marketTypeIds.size() > 0)
   #set($hasQuery = true)
-  $util.qr($filter.add({"bool":{"should":[{"terms":{"marketTypeId.keyword":$input.marketTypeIds}},{"terms":{"raw.marketTypeId.keyword":$input.marketTypeIds}},{"terms":{"raw.market_type_id.keyword":$input.marketTypeIds}}],"minimum_should_match":1}}))
+  #set($marketTypeShould = [])
+  #foreach($marketTypeId in $input.marketTypeIds)
+    $util.qr($marketTypeShould.add({"term":{"marketTypeId.keyword":$marketTypeId}}))
+    $util.qr($marketTypeShould.add({"term":{"raw.marketTypeId.keyword":$marketTypeId}}))
+    $util.qr($marketTypeShould.add({"term":{"raw.market_type_id.keyword":$marketTypeId}}))
+    $util.qr($marketTypeShould.add({"match_phrase":{"enrichmentSearchText":$marketTypeId}}))
+    $util.qr($marketTypeShould.add({"match_phrase":{"raw.enrichmentSearchText":$marketTypeId}}))
+  #end
+  $util.qr($filter.add({"bool":{"should":$marketTypeShould,"minimum_should_match":1}}))
 #end
 #if(!$util.isNull($input.statuses) && $input.statuses.size() > 0)
   #set($hasQuery = true)
