@@ -98,11 +98,11 @@ public class IngestWorkerService {
     try {
       JsonNode root = objectMapper.readTree(rawJson);
       JsonNode message = messageNode(root);
-      String marketId = firstText(root, message, "marketId", "id");
+      String marketId = firstText(root, message, "marketId", "market_id", "marketID", "id");
       if (marketId != null) {
         return "market:" + marketId;
       }
-      String eventId = firstText(root, message, "eventId");
+      String eventId = firstText(root, message, "eventId", "event_id", "eventID");
       if (eventId != null) {
         return "event:" + eventId;
       }

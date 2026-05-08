@@ -63,8 +63,8 @@ public class MarketMessageHandler {
       Map<String, Object> rawPayload = objectMapper.convertValue(root, MAP_TYPE);
       Map<String, Object> messagePayload = objectMapper.convertValue(message, MAP_TYPE);
       String messageType = detectMessageType(root, message);
-      String marketId = firstText(root, message, "marketId", "id");
-      String eventId = firstText(root, message, "eventId");
+      String marketId = firstText(root, message, "marketId", "market_id", "marketID", "id");
+      String eventId = firstText(root, message, "eventId", "event_id", "eventID");
 
       if (ingestProperties.messageLoggingEnabled()) {
         log.info("Message received: {}", rawJson);
@@ -99,16 +99,16 @@ public class MarketMessageHandler {
 
   private void routeProjection(JsonNode root, Map<String, Object> payload, String messageType, Instant receivedAt) {
     switch (messageType) {
-      case "EventUpdate" -> openSearchWriter.upsertEvent(text(root, "eventId"), receivedAt, payload);
+      case "EventUpdate" -> openSearchWriter.upsertEvent(firstText(root, root, "eventId", "event_id", "eventID", "id"), receivedAt, payload);
       case "MarketUpdate" -> {
-        String marketId = firstText(root, root, "marketId", "id");
+        String marketId = firstText(root, root, "marketId", "market_id", "marketID", "id");
         Map<String, Object> currentMarket = openSearchWriter.upsertMarket(marketId, receivedAt, payload);
-        publishMarketUpdate(marketId, text(root, "eventId"), messageType, receivedAt, currentMarket);
+        publishMarketUpdate(marketId, firstText(root, root, "eventId", "event_id", "eventID"), messageType, receivedAt, currentMarket);
       }
       case "MarketStatusUpdate" -> {
-        String marketId = firstText(root, root, "marketId", "id");
+        String marketId = firstText(root, root, "marketId", "market_id", "marketID", "id");
         Map<String, Object> currentMarket = openSearchWriter.upsertMarketStatus(marketId, receivedAt, payload);
-        publishMarketUpdate(marketId, text(root, "eventId"), messageType, receivedAt, currentMarket);
+        publishMarketUpdate(marketId, firstText(root, root, "eventId", "event_id", "eventID"), messageType, receivedAt, currentMarket);
       }
       case "MarketPriceUpdate" -> {
         List<PriceUpdate> prices = flattenPrices(root, receivedAt);
@@ -118,7 +118,12 @@ public class MarketMessageHandler {
         }
         if (prices.isEmpty() && "Snapshot".equals(text(root, "updateType"))) {
           Map<String, Object> currentMarket = openSearchWriter.clearMarketPrices(root, receivedAt, enrichment);
-          publishMarketUpdate(text(root, "marketId"), text(root, "eventId"), text(root, "updateType"), receivedAt, currentMarket);
+          publishMarketUpdate(
+              firstText(root, root, "marketId", "market_id", "marketID"),
+              firstText(root, root, "eventId", "event_id", "eventID"),
+              text(root, "updateType"),
+              receivedAt,
+              currentMarket);
           marketEnrichmentService.requestMarketEnrichment(root);
           return;
         }
@@ -128,7 +133,12 @@ public class MarketMessageHandler {
           }
         }
         Map<String, Object> currentMarket = openSearchWriter.upsertMarketPrices(prices, enrichment);
-        publishMarketUpdate(text(root, "marketId"), text(root, "eventId"), text(root, "updateType"), receivedAt, currentMarket);
+        publishMarketUpdate(
+            firstText(root, root, "marketId", "market_id", "marketID"),
+            firstText(root, root, "eventId", "event_id", "eventID"),
+            text(root, "updateType"),
+            receivedAt,
+            currentMarket);
         marketEnrichmentService.requestMarketEnrichment(prices);
         timestreamWriter.writePrices(prices);
       }
@@ -157,8 +167,8 @@ public class MarketMessageHandler {
     for (JsonNode priceNode : prices) {
       Instant validAt = instant(priceNode, "validAt");
       Map<String, Object> source = new LinkedHashMap<>();
-      source.put("marketId", text(root, "marketId"));
-      source.put("eventId", text(root, "eventId"));
+      source.put("marketId", firstText(root, root, "marketId", "market_id", "marketID"));
+      source.put("eventId", firstText(root, root, "eventId", "event_id", "eventID"));
       source.put("eventGroupId", text(root, "eventGroupId"));
       source.put("categoryId", text(root, "categoryId"));
       source.put("subCategoryId", text(root, "subCategoryId"));
@@ -172,8 +182,8 @@ public class MarketMessageHandler {
       source.put("receivedAt", receivedAt.toString());
       source.put("updateType", text(root, "updateType"));
       result.add(new PriceUpdate(
-          text(root, "marketId"),
-          text(root, "eventId"),
+          firstText(root, root, "marketId", "market_id", "marketID"),
+          firstText(root, root, "eventId", "event_id", "eventID"),
           text(root, "eventGroupId"),
           text(root, "categoryId"),
           text(root, "subCategoryId"),
@@ -210,7 +220,8 @@ public class MarketMessageHandler {
       return explicit;
     }
     String subscriptionType = firstText(root, message, "subscriptionType");
-    if (subscriptionType != null && subscriptionType.endsWith("Update") && message.has("marketId")) {
+    if (subscriptionType != null && subscriptionType.endsWith("Update")
+        && (message.has("marketId") || message.has("market_id") || message.has("marketID"))) {
       return subscriptionType;
     }
     if (message.has("prices")) {
@@ -219,7 +230,7 @@ public class MarketMessageHandler {
     if (message.has("marketOutcomes")) {
       return "MarketUpdate";
     }
-    if (message.has("status") && (message.has("marketId") || message.has("id"))) {
+    if (message.has("status") && (message.has("marketId") || message.has("market_id") || message.has("marketID") || message.has("id"))) {
       return "MarketStatusUpdate";
     }
     if ((message.has("eventId") || message.has("id")) && message.has("expectedStartTime")) {

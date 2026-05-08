@@ -251,7 +251,7 @@ public class OpenSearchWriter {
   }
 
   public Map<String, Object> clearMarketPrices(JsonNode root, Instant receivedAt, Map<String, Object> enrichment) {
-    String marketId = text(root, "marketId");
+    String marketId = firstText(root, "marketId", "market_id", "marketID");
     if (marketId == null) {
       return Map.of();
     }
@@ -646,8 +646,8 @@ public class OpenSearchWriter {
   }
 
   private Map<String, Object> currentEmptyPriceDocument(JsonNode root, Instant receivedAt) {
-    String marketId = text(root, "marketId");
-    String eventId = text(root, "eventId");
+    String marketId = firstText(root, "marketId", "market_id", "marketID");
+    String eventId = firstText(root, "eventId", "event_id", "eventID");
 
     Map<String, Object> raw = new LinkedHashMap<>();
     raw.put("marketId", marketId);

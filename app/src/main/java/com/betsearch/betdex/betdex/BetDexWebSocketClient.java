@@ -225,6 +225,7 @@ public class BetDexWebSocketClient implements ApplicationRunner {
 
     if (!queue.offer(message)) {
       logDroppedMessage("Dropped BetDEX stream message because inbound queue is full", message);
+      return false;
     }
     return true;
   }
@@ -237,7 +238,10 @@ public class BetDexWebSocketClient implements ApplicationRunner {
       if (!"MarketPriceUpdate".equals(type) && !payload.has("prices")) {
         return;
       }
-      String marketId = firstText(root, payload, "marketId", "id");
+      if (!"Incremental".equals(firstText(root, payload, "updateType"))) {
+        return;
+      }
+      String marketId = firstText(root, payload, "marketId", "market_id", "marketID", "id");
       if (marketId == null) {
         return;
       }
@@ -265,8 +269,8 @@ public class BetDexWebSocketClient implements ApplicationRunner {
           "{} type={} marketId={} eventId={} updateType={} priceCount={} firstPrice={}",
           reason,
           firstText(node, payload, "messageType", "type"),
-          firstText(node, payload, "marketId", "id"),
-          firstText(node, payload, "eventId"),
+          firstText(node, payload, "marketId", "market_id", "marketID", "id"),
+          firstText(node, payload, "eventId", "event_id", "eventID"),
           firstText(node, payload, "updateType"),
           priceCount(payload),
           firstPriceSummary(payload));
@@ -397,6 +401,8 @@ public class BetDexWebSocketClient implements ApplicationRunner {
           log.warn("BetDEX stream rejected a subscription before authentication; re-authenticating connection={}", id);
           subscriptionsSent.set(false);
           sendAuthenticationFrame(webSocket);
+        } else if (kind == MessageKind.SUBSCRIBE_ACK) {
+          logSubscribeAck(message);
         }
 
         if (replacement && kind == MessageKind.DATA && promoted.compareAndSet(false, true)) {
@@ -481,13 +487,30 @@ public class BetDexWebSocketClient implements ApplicationRunner {
             kind,
             firstText(node, payload, "messageType", "type"),
             firstText(node, payload, "subscriptionType"),
-            firstText(node, payload, "marketId", "id"),
-            firstText(node, payload, "eventId"),
+            firstText(node, payload, "marketId", "market_id", "marketID", "id"),
+            firstText(node, payload, "eventId", "event_id", "eventID"),
             firstText(node, payload, "updateType"),
             priceCount(payload),
             firstPriceSummary(payload));
       } catch (JsonProcessingException e) {
         log.info("BetDEX WebSocket non-JSON message received connection={} replacement={} kind={}", id, replacement, kind);
+      }
+    }
+
+    private void logSubscribeAck(String message) {
+      try {
+        JsonNode node = objectMapper.readTree(message);
+        JsonNode payload = messageNode(node);
+        log.info(
+            "BetDEX WebSocket subscription acknowledged connection={} subscriptionType={} subscriptionId={} subscriptionIds={} status={} message={}",
+            id,
+            firstText(node, payload, "subscriptionType"),
+            firstText(node, payload, "subscriptionId"),
+            payload.path("subscriptionIds").isMissingNode() ? null : payload.path("subscriptionIds").toString(),
+            firstText(node, payload, "status", "result"),
+            firstText(node, payload, "message", "reason", "error"));
+      } catch (JsonProcessingException e) {
+        log.info("BetDEX WebSocket subscription acknowledged connection={} raw={}", id, message);
       }
     }
 
