@@ -9,6 +9,11 @@ const numberFormatter = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0
 });
 
+const liquidityFormatter = new Intl.NumberFormat('en-US', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+});
+
 const dateFormatter = new Intl.DateTimeFormat('en-US', {
   month: 'short',
   day: 'numeric',
@@ -396,7 +401,7 @@ function PriceLink({
     <a className={`price-button price-button-${displaySide}`} href={href} target="_blank" rel="noreferrer">
       <span>{label}</span>
       <strong>{price.price.toFixed(2)}</strong>
-      <small>${numberFormatter.format(price.liquidity)}</small>
+      <small>${liquidityFormatter.format(price.liquidity)}</small>
     </a>
   );
 }
