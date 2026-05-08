@@ -2,7 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { Search } from 'lucide-react';
 import { dataSourceLabel, getMarket, initialMarkets, searchMarkets, subscribeToMarketUpdates } from './api';
-import { leagueLabel, leagueLabels, marketTypeGroupFor, marketTypeGroups, marketTypeLabel, sportLabel, sportLabels } from './filterMetadata';
+import { leagueLabel, leagueLabels, marketTypeGroupFor, marketTypeGroups, marketTypeLabel, sportGroupFor, sportGroups, sportLabel } from './filterMetadata';
 import type { InPlayFilter, Market, MarketSearchInput, MarketSearchResult, MarketSort, PricePoint } from './types';
 import './styles.css';
 
@@ -24,10 +24,10 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
 
 const betdexBaseUrl = 'https://dev.betdex.com';
 const pageSizes = [10, 20, 50];
-const defaultSportOptions = Object.entries(sportLabels).map(([value, label]) => ({ value, label }));
+const defaultSportOptions = sportGroups.map((group) => ({ value: group.value, label: group.label }));
 const defaultLeagueOptions = Object.entries(leagueLabels).map(([value, label]) => ({ value, label }));
 const defaultMarketTypeOptions = marketTypeGroups.map((group) => ({ value: group.value, label: group.label }));
-const sportIds = new Set(defaultSportOptions.map((option) => option.value));
+const sportIds = new Set(sportGroups.flatMap((group) => group.subCategoryIds));
 const nonLeagueIds = new Set(['SPORTS', 'FOOTBALL', 'CRICKET', 'ICEHKY']);
 
 function App() {
@@ -532,7 +532,8 @@ function deriveFilterOptions(items: Market[]) {
       ...defaultSportOptions,
       ...items
         .filter((market) => sportIds.has(market.subCategoryId))
-        .map((market) => ({ value: market.subCategoryId, label: sportLabel(market.subCategoryId) }))
+        .map((market) => sportGroupFor(market.subCategoryId) ?? market.subCategoryId)
+        .map((value) => ({ value, label: sportLabel(value) }))
     ]),
     leagues: uniqueOptions([
       ...defaultLeagueOptions,

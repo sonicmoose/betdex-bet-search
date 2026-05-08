@@ -1,5 +1,5 @@
 import { markets as mockMarkets, searchMarkets as searchMockMarkets } from './mockApi';
-import { expandMarketTypeGroups } from './filterMetadata';
+import { expandMarketTypeGroups, expandSportGroups } from './filterMetadata';
 import type { Market, MarketOutcome, MarketSearchInput, MarketSearchResult, MarketSort, MarketStatus, MarketUpdate, PricePoint } from './types';
 
 const appsyncUrl = import.meta.env.VITE_APPSYNC_GRAPHQL_URL as string | undefined;
@@ -193,7 +193,7 @@ export function subscribeToMarketUpdates(
 function toGraphqlInput(input: MarketSearchInput) {
   return {
     text: input.text.trim() || undefined,
-    subCategoryIds: input.subCategoryIds.length ? input.subCategoryIds : undefined,
+    subCategoryIds: input.subCategoryIds.length ? expandSportGroups(input.subCategoryIds) : undefined,
     eventGroupId: input.eventGroupIds.length === 1 ? input.eventGroupIds[0] : undefined,
     eventGroupIds: input.eventGroupIds.length > 1 ? input.eventGroupIds : undefined,
     marketTypeIds: input.marketTypeIds.length ? expandMarketTypeGroups(input.marketTypeIds) : undefined,

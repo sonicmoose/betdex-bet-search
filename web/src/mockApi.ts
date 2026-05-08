@@ -1,5 +1,5 @@
 import type { Market, MarketOutcome, MarketSearchInput, MarketSearchResult, MarketStatus, PricePoint } from './types';
-import { expandMarketTypeGroups } from './filterMetadata';
+import { expandMarketTypeGroups, expandSportGroups } from './filterMetadata';
 
 const now = Date.now();
 
@@ -57,7 +57,8 @@ export async function searchMarkets(input: MarketSearchInput): Promise<MarketSea
     const textMatch = !text || searchable.some((value) => value.toLowerCase().includes(text));
     const statusMatch = market.status === 'Open';
     const inPlayMatch = input.inPlay.length === 0 || input.inPlay.includes(market.inPlay ? 'Yes' : 'No');
-    const sportMatch = input.subCategoryIds.length === 0 || input.subCategoryIds.includes(market.subCategoryId);
+    const subCategoryIds = expandSportGroups(input.subCategoryIds);
+    const sportMatch = subCategoryIds.length === 0 || subCategoryIds.includes(market.subCategoryId);
     const leagueMatch = input.eventGroupIds.length === 0 || input.eventGroupIds.includes(market.eventGroupId);
     const marketTypeIds = expandMarketTypeGroups(input.marketTypeIds);
     const marketTypeMatch = marketTypeIds.length === 0 || marketTypeIds.includes(market.marketTypeId);
