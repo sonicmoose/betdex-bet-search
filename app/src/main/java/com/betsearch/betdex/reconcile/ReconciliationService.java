@@ -4,6 +4,8 @@ import com.betsearch.betdex.betdex.BetDexMarketEnrichmentService;
 import com.betsearch.betdex.config.IngestProperties;
 import com.betsearch.betdex.opensearch.OpenSearchWriter;
 import jakarta.annotation.PreDestroy;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executors;
@@ -53,6 +55,15 @@ public class ReconciliationService {
   public void reconcile() {
     int maxMarkets = Math.max(1, properties.reconciliation().maxMarkets());
     int batchSize = Math.max(1, properties.reconciliation().batchSize());
+    Duration expiredMarketGrace = properties.reconciliation().expiredMarketGrace();
+    if (expiredMarketGrace != null && !expiredMarketGrace.isNegative()) {
+      Instant cutoff = Instant.now().minus(expiredMarketGrace);
+      long deleted = openSearchWriter.deleteExpiredOpenMarkets(cutoff);
+      if (deleted > 0) {
+        log.info("BetDEX reconciliation deleted {} expired open markets cutoff={}", deleted, cutoff);
+      }
+    }
+
     List<String> marketIds = openSearchWriter.openMarketIds(maxMarkets);
     if (marketIds.isEmpty()) {
       log.info("BetDEX reconciliation found no open markets to refresh");

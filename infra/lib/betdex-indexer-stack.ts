@@ -335,6 +335,10 @@ function searchMarketsRequestTemplate(): string {
   #set($hasQuery = true)
   $util.qr($filter.add({"term":{"raw.status.keyword":$input.status}}))
 #end
+#if($util.isNull($input.startsAfter) && $util.isNull($input.startsBefore))
+  #set($hasQuery = true)
+  $util.qr($filter.add({"bool":{"should":[{"range":{"raw.lockAt":{"gte":$util.time.nowISO8601()}}},{"term":{"raw.inPlayStatus.keyword":"InPlay"}}],"minimum_should_match":1}}))
+#end
 #if(!$util.isNull($input.categoryIds) && $input.categoryIds.size() > 0)
   #set($hasQuery = true)
   $util.qr($filter.add({"bool":{"should":[{"terms":{"categoryId.keyword":$input.categoryIds}},{"terms":{"raw.categoryId.keyword":$input.categoryIds}}],"minimum_should_match":1}}))

@@ -25,6 +25,7 @@ public record IngestProperties(
       Duration initialDelay,
       Duration interval,
       int maxMarkets,
-      int batchSize) {
+      int batchSize,
+      Duration expiredMarketGrace) {
   }
 }

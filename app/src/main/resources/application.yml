@@ -56,6 +56,7 @@ ingest:
     interval: ${INGEST_RECONCILIATION_INTERVAL:10m}
     max-markets: ${INGEST_RECONCILIATION_MAX_MARKETS:50000}
     batch-size: ${INGEST_RECONCILIATION_BATCH_SIZE:50}
+    expired-market-grace: ${INGEST_RECONCILIATION_EXPIRED_MARKET_GRACE:2h}
 
 management:
   endpoints:

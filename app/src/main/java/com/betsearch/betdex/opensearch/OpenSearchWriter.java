@@ -119,6 +119,28 @@ public class OpenSearchWriter {
     return new ArrayList<>(marketIds);
   }
 
+  public long deleteExpiredOpenMarkets(Instant cutoff) {
+    if (cutoff == null || properties.endpoint() == null || properties.endpoint().isBlank()) {
+      return 0;
+    }
+
+    Map<String, Object> payload = Map.of(
+        "query", Map.of(
+            "bool", Map.of(
+                "filter", List.of(
+                    Map.of("term", Map.of("raw.status.keyword", "Open")),
+                    Map.of("range", Map.of("raw.lockAt", Map.of("lt", cutoff.toString())))),
+                "must_not", List.of(
+                    Map.of("term", Map.of("raw.inPlayStatus.keyword", "InPlay"))))));
+    String response = postForResponse("/" + properties.marketsCurrentIndex() + "/_delete_by_query?conflicts=proceed", payload);
+    try {
+      JsonNode root = objectMapper.readTree(response);
+      return root.path("deleted").asLong(0);
+    } catch (JsonProcessingException e) {
+      throw new IllegalStateException("Failed to parse OpenSearch expired market deletion response", e);
+    }
+  }
+
   private List<String> sortValues(JsonNode sort) {
     if (sort == null || !sort.isArray()) {
       return List.of();
