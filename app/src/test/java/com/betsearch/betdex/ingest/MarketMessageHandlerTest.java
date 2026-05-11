@@ -34,7 +34,7 @@ class MarketMessageHandlerTest {
       false,
       new IngestProperties.Reconnect(Duration.ofSeconds(1), Duration.ofMinutes(1)),
       new IngestProperties.Stream(Duration.ofMinutes(115), Duration.ofMinutes(10)),
-      new IngestProperties.Reconciliation(true, Duration.ofMinutes(2), Duration.ofMinutes(10), 1000, 50));
+      new IngestProperties.Reconciliation(true, Duration.ofMinutes(2), Duration.ofMinutes(10), 1000, 50, Duration.ofHours(2)));
   private final MarketMessageHandler handler = new MarketMessageHandler(
       new ObjectMapper(),
       openSearchWriter,
